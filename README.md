@@ -10,7 +10,7 @@ A full-stack, responsive Hall of Fame and battle-records website. Lifetime point
 
 ## Deploy safely
 
-Deploy to Vercel or another Next.js host with a managed database. For production, switch the Prisma datasource provider in `prisma/schema.prisma` from `sqlite` to `postgresql`, provide a PostgreSQL `DATABASE_URL`, run `prisma db push`, and set all environment variables in the host dashboard. Do not commit `.env` or expose the password hash.
+Deploy to Vercel with your Supabase PostgreSQL database. Copy the Supabase connection URI into Vercel as `DATABASE_URL`, run `npx prisma db push` once from a local terminal or database migration workflow, and set all environment variables in the Vercel dashboard. Do not commit `.env` or expose the password hash.
 
 ## Security model
 
