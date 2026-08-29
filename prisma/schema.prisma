@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url = env("DATABASE_URL")
+}
+
+model Player {
+  id String @id @default(cuid())
+  name String
+  ign String @unique
+  points Int @default(0)
+  bestPerformance String?
+  notes String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions PointTransaction[]
+  categoryRecords CategoryRecord[]
+  winnerMatches Match[] @relation("winner")
+  loserMatches Match[] @relation("loser")
+}
+model PointTransaction {
+  id String @id @default(cuid())
+  playerId String
+  amount Int
+  newTotal Int
+  reason String?
+  action String
+  actor String
+  createdAt DateTime @default(now())
+  player Player @relation(fields:[playerId], references:[id], onDelete: Restrict)
+}
+model Category {
+  id String @id @default(cuid())
+  name String @unique
+  description String?
+  image String?
+  createdAt DateTime @default(now())
+  records CategoryRecord[]
+  matches Match[]
+}
+model CategoryRecord {
+  id String @id @default(cuid())
+  categoryId String
+  playerId String
+  wins Int @default(0)
+  losses Int @default(0)
+  pokemon String?
+  category Category @relation(fields:[categoryId], references:[id], onDelete: Cascade)
+  player Player @relation(fields:[playerId], references:[id], onDelete: Cascade)
+  @@unique([categoryId, playerId])
+}
+model Match {
+  id String @id @default(cuid())
+  categoryId String
+  winnerId String
+  loserId String
+  notes String?
+  playedAt DateTime @default(now())
+  category Category @relation(fields:[categoryId], references:[id], onDelete: Cascade)
+  winner Player @relation("winner", fields:[winnerId], references:[id], onDelete: Restrict)
+  loser Player @relation("loser", fields:[loserId], references:[id], onDelete: Restrict)
+}
+model Setting {
+  key String @id
+  value String
+}
+
