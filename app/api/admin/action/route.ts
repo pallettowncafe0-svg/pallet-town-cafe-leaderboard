@@ -4,10 +4,34 @@ import { requireAdmin } from "@/lib/auth";
 const date = (value?:string) => value ? new Date(value) : new Date();
 
 async function recalculateCategory(categoryId: string, tx: any) {
- const [matches, existingRecords] = await Promise.all([
-  tx.match.findMany({where:{categoryId},select:{winnerId:true,loserId:true}}),
-  tx.categoryRecord.findMany({where:{categoryId},select:{playerId:true,pokemon:true}})
- ]);
+const [matches, existingRecords] = await Promise.all([
+  tx.match.findMany({
+    where:{
+      categoryId,
+      winner:{
+        is:{
+          active:true
+        }
+      },
+      loser:{
+        is:{
+          active:true
+        }
+      }
+    },
+    select:{
+      winnerId:true,
+      loserId:true
+    }
+  }),
+  tx.categoryRecord.findMany({
+    where:{categoryId},
+    select:{
+      playerId:true,
+      pokemon:true
+    }
+  })
+]);
  const pokemonByPlayer = new Map(existingRecords.map((record:any)=>[record.playerId, record.pokemon]));
  const totals = new Map<string,{wins:number;losses:number}>();
  for (const match of matches) {
