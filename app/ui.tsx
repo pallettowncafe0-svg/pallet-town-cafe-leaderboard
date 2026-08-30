@@ -19,7 +19,80 @@ export default function LeaderboardApp(){
 function Hall({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">PERMANENT STANDINGS</p><h2>Lifetime Leaderboard</h2></div>{admin&&<div><button className="button ghost" onClick={()=>open("points")}>Award Points</button><button className="button" onClick={()=>open("player")}>New Player</button></div>}</div><label className="search">⌕<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by player name or IGN…"/></label><div className="podium">{players.slice(0,3).map(p=><button key={p.id} className={`place p${p.rank}`} onClick={()=>choose(p)}><i>{p.rank===1?"♛":p.rank===2?"Ⅱ":"Ⅲ"}</i><strong>{p.ign}</strong><span>{p.points} pts</span></button>)}</div><div className="table"><div className="row labels"><span>RANK</span><span>PLAYER</span><span>STATUS</span><span>POINTS</span></div>{players.map(p=><button className="row" key={p.id} onClick={()=>choose(p)}><span className={`rank r${p.rank}`}>#{p.rank}</span><span><strong>{p.name}</strong><small>{p.ign}</small></span><span>{p.rank===1?<em className="champion">Champion</em>:p.rank<=3?<em>Top 3</em>:p.rank<=10?<em>Top 10</em>:<em className="regular">Competitive</em>}</span><span className="points">{p.points.toLocaleString()}</span></button>)}</div></>}
 function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">⌕<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>⚔</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
-function Category({category,players,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">INDEPENDENT W/L RANKING</p><h2>{category.name}</h2><p className="muted">{category.description}</p></div>{admin&&<div><button className="button ghost" onClick={()=>open("pokemon")}>Set Pokémon</button><button className="button" onClick={()=>open("match")}>Record Battle</button></div>}</div><div className="top-three">{category.records.slice(0,3).map((r:any)=><article key={r.id}><b>#{r.rank} · {r.player.ign}</b><strong>{r.wins}W – {r.losses}L <small>{r.winRate}% WR</small></strong><p>{r.pokemon.length?r.pokemon.join(" · "):"Pokémon roster not recorded"}</p></article>)}</div><div className="table"><div className="row labels"><span>RANK</span><span>PLAYER</span><span>RECORD</span><span>WIN RATE</span></div>{category.records.map((r:any)=><button className="row" key={r.id} {category.records.map((r:any)=><button   className="row"   key={r.id}   onClick={()=>{     const player=players.find((p:any)=>p.id===r.playerId);     if(player) choose(player);   }} >   <span className="rank">#{r.rank}</span>   <span>     <strong>{r.player.name}</strong>     <small>{r.player.ign}</small>   </span>   <span>{r.wins}W / {r.losses}L</span>   <span className="points">{r.winRate}%</span> </button>)}><span className="rank">#{r.rank}</span><span><strong>{r.player.name}</strong><small>{r.player.ign}</small></span><span>{r.wins}W / {r.losses}L</span><span className="points">{r.winRate}%</span></button>)}</div></>}
+function Category({category,players,choose,admin,open}:any){
+  return <>
+    <div className="section-head">
+      <div>
+        <p className="eyebrow">INDEPENDENT W/L RANKING</p>
+        <h2>{category.name}</h2>
+        <p className="muted">{category.description}</p>
+      </div>
+
+      {admin&&
+        <div>
+          <button className="button ghost" onClick={()=>open("pokemon")}>
+            Set Pokémon
+          </button>
+          <button className="button" onClick={()=>open("match")}>
+            Record Battle
+          </button>
+        </div>
+      }
+    </div>
+
+    <div className="top-three">
+      {category.records.slice(0,3).map((r:any)=>
+        <article key={r.id}>
+          <b>#{r.rank} · {r.player.ign}</b>
+          <strong>
+            {r.wins}W – {r.losses}L <small>{r.winRate}% WR</small>
+          </strong>
+          <p>
+            {r.pokemon.length
+              ?r.pokemon.join(" · ")
+              :"Pokémon roster not recorded"}
+          </p>
+        </article>
+      )}
+    </div>
+
+    <div className="table">
+      <div className="row labels">
+        <span>RANK</span>
+        <span>PLAYER</span>
+        <span>RECORD</span>
+        <span>WIN RATE</span>
+      </div>
+
+      {category.records.map((r:any)=>{
+        const player=players.find((p:any)=>p.id===r.playerId);
+
+        return (
+          <button
+            className="row"
+            key={r.id}
+            onClick={()=>{
+              if(player) choose(player);
+            }}
+          >
+            <span className="rank">#{r.rank}</span>
+
+            <span>
+              <strong>{r.player.name}</strong>
+              <small>{r.player.ign}</small>
+            </span>
+
+            <span>{r.wins}W / {r.losses}L</span>
+
+            <span className="points">
+              {r.winRate}%
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  </>;
+}
 function History({items,matches}:any){return <><div className="section-head"><div><p className="eyebrow">PERMANENT RECORDS</p><h2>Activity History</h2></div></div><h3>Point Transactions</h3><div className="timeline">{items.map((x:any)=><article key={x.id}><b className={x.amount>0?"plus":"minus"}>{x.amount>0?"+":""}{x.amount} pts</b><div><strong>{x.player.name} <small>/{x.player.ign}</small></strong><p>{x.reason||x.action} · New total: {x.newTotal}</p></div><time>{fmt(x.createdAt)}</time></article>)}</div><h3>Battle History</h3><div className="timeline">{matches.map((m:any)=><article key={m.id}><b>⚔</b><div><strong>{m.winner.ign} defeated {m.loser.ign}</strong><p>{m.category.name}{m.notes?` · ${m.notes}`:""}</p></div><time>{fmt(m.playedAt)}</time></article>)}</div></>}
 function Profile({player,categories,close,admin,open}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="drawer"><button className="x" onClick={close}>×</button><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign}</p><div className="profile-score"><b>#{player.rank}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div>}
 function Backup({admin,onImport}:any){const [file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false);return <><div className="section-head"><div><p className="eyebrow">DATA PORTABILITY</p><h2>Backup & Restore</h2></div></div><div className="backup"><article><h3>Export Excel Backup</h3><p>Download the complete current leaderboard, history, battle records, and Pokémon lineups in one `.xlsx` workbook.</p><a className={`button ${!admin?"disabled":""}`} href={admin?"/api/export":undefined}>Export .xlsx</a></article><article><h3>Import Backup</h3><p>Restore players, battle categories, records, and Pokémon lineups. Existing players are matched by IGN.</p><input type="file" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="button" disabled={!admin||!file||busy} onClick={async()=>{if(!confirm("Import this backup? Existing player points and category records may be updated."))return;setBusy(true);try{await onImport(file)}catch(e){alert(e instanceof Error?e.message:"Import failed")}finally{setBusy(false)}}}> {busy?"Importing…":"Confirm Import"}</button></article></div>{!admin&&<p className="empty">Sign in as an admin to access backups.</p>}</>}
