@@ -14,16 +14,16 @@
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.10",
     "next": "^15.5.24",
-    "react": "catalog:",
-    "react-dom": "catalog:",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
+    "@types/node": "^22.15.2",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
     "prisma": "^6.19.3",
-    "tsx": "catalog:",
+    "tsx": "^4.19.3",
     "typescript": "~5.9.3"
   }
 }
