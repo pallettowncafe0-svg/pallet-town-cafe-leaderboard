@@ -10,18 +10,347 @@ function Avatar({player,className=""}:{player:any;className?:string}) {
  return <span className={`avatar avatar-fallback ${className}`} aria-label={`${player?.name||player?.ign||"Player"} initials`}>{initials(player)}</span>;
 }
 export default function LeaderboardApp(){
- const [data,setData]=useState<Data>(empty),[view,setView]=useState("hall"),[query,setQuery]=useState(""),[selected,setSelected]=useState<any>(null),[modal,setModal]=useState<string|null>(null),[notice,setNotice]=useState("");
- const load=()=>fetch("/api/data").then(r=>r.json()).then(setData).catch(()=>setNotice("Could not load leaderboard data.")); useEffect(()=>{ void load(); },[]);
- const api=async(action:string,payload:any={})=>{const r=await fetch("/api/admin/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,payload})});const result=await r.json();if(!r.ok)throw new Error(result.error);load();setModal(null);setNotice("Saved successfully.");};
-  const choosePlayer=(candidate:any)=>{const id=candidate?.id||candidate?.playerId;const nested=candidate?.player;const player=data.players.find(p=>p.id===id||p.id===nested?.id)||data.players.find(p=>p.ign===candidate?.ign||p.ign===nested?.ign)||nested||candidate;if(player?.id)setSelected(player);};
- const filtered=useMemo(()=>data.players.filter(p=>(p.name+p.ign).toLowerCase().includes(query.toLowerCase())),[data.players,query]);
- const stats={points:data.players.reduce((n,p)=>n+p.points,0),battles:data.matches.length};
-  const background=data.background?{backgroundImage:`linear-gradient(rgba(8,8,8,.9),rgba(8,8,8,.98)),url(${data.background})`}:{};
- return <main className="site" style={background}><header><button className="brand" onClick={()=>setView("hall")}><span>◉</span><div>Pallet Town Cafe<small>SVR COMPETITIVE HUB</small></div></button><nav>{[["hall","Hall of Fame"],["battle","Battle Leaderboards"],["players","Players"],["history","History"],["backup","Backup"]].map(([id,label])=><button key={id} className={view===id?"active":""} onClick={()=>setView(id)}>{label}</button>)}</nav><button className="admin" onClick={()=>setModal(data.isAdmin?"control":"login")}>{data.isAdmin?"Admin Controls":"Admin Sign In"}</button></header>
- <section className="hero"><div><p className="eyebrow">THE LIFETIME RANKINGS</p><h1>{view==="hall"?"Hall of Fame":view==="battle"?"Battle Leaderboards":"Pallet Town Cafe"}</h1><p className="sub">Where every battle, victory, and point counts.</p></div><div className="hero-stats"><b>{data.players[0]?.ign||"—"}<small>Current Champion</small></b><b>{stats.points.toLocaleString()}<small>Total Points</small></b><b>{stats.battles}<small>Recorded Battles</small></b></div></section>
-  <div className="layout"><aside><p>EXPLORE</p>{data.categories.map(c=><button key={c.id} onClick={()=>{setView("category");setSelected(c);}}>BATTLE · {c.name}</button>)}{data.isAdmin&&<button onClick={()=>setModal("category")}>+ Create Category</button>}<div className="aside-rule"/><button onClick={()=>setModal("background")}>Background</button></aside><section className="content">{view==="hall"&&<Hall players={filtered} query={query} setQuery={setQuery} choose={choosePlayer} admin={data.isAdmin} open={setModal}/>} {view==="players"&&<Players players={filtered} query={query} setQuery={setQuery} choose={choosePlayer} admin={data.isAdmin} open={setModal}/>} {view==="battle"&&<Battle categories={data.categories} choose={c=>{setSelected(c);setView("category")}} admin={data.isAdmin} open={setModal}/>} {view==="category"&&selected&&<Category category={data.categories.find(c=>c.id===selected.id)||selected} players={data.players} choose={choosePlayer} admin={data.isAdmin} open={setModal}/>} {view==="history"&&<History items={data.history} matches={data.matches} admin={data.isAdmin} open={setModal} choose={setSelected}/>} {view==="backup"&&<Backup admin={data.isAdmin} onImport={async(file)=>{const form=new FormData();form.append("file",file);const r=await fetch("/api/import",{method:"POST",body:form});const out=await r.json();if(!r.ok)throw new Error(out.error);setNotice(out.message);load();}}/>}</section></div>
- {selected&&modal===null&&data.players.some(p=>p.id===selected.id)&&<Profile player={data.players.find(p=>p.id===selected.id)} categories={data.categories} close={()=>setSelected(null)} admin={data.isAdmin} open={setModal}/>}
- {modal&&<Modal type={modal} data={data} selected={selected} close={()=>setModal(null)} api={api} reload={load}/>} {notice&&<div className="toast" onClick={()=>setNotice("")}>{notice}</div>}</main>;
+ const [data,setData]=useState<Data>(empty);
+ const [view,setView]=useState("hall");
+ const [query,setQuery]=useState("");
+ const [selectedPlayer,setSelectedPlayer]=useState<any>(null);
+ const [selectedCategory,setSelectedCategory]=useState<any>(null);
+ const [selectedMatch,setSelectedMatch]=useState<any>(null);
+ const [modal,setModal]=useState<string|null>(null);
+ const [notice,setNotice]=useState("");
+
+ const load=async()=>{
+  try{
+   const r=await fetch("/api/data",{cache:"no-store"});
+   if(!r.ok)throw new Error("Could not load leaderboard data.");
+   const result=await r.json();
+   setData(result);
+  }catch{
+   setNotice("Could not load leaderboard data.");
+  }
+ };
+
+ useEffect(()=>{
+  void load();
+ },[]);
+
+ const api=async(action:string,payload:any={})=>{
+  const r=await fetch("/api/admin/action",{
+   method:"POST",
+   headers:{"Content-Type":"application/json"},
+   body:JSON.stringify({action,payload})
+  });
+
+  const result=await r.json();
+
+  if(!r.ok)throw new Error(result.error);
+
+  await load();
+  setModal(null);
+  setNotice("Saved successfully.");
+ };
+
+ const choosePlayer=(candidate:any)=>{
+  const id=candidate?.id||candidate?.playerId;
+  const nested=candidate?.player;
+
+  const player=
+   data.players.find(p=>p.id===id||p.id===nested?.id)||
+   data.players.find(p=>p.ign===candidate?.ign||p.ign===nested?.ign)||
+   nested||
+   candidate;
+
+  if(player?.id){
+   setSelectedPlayer(player);
+  }
+ };
+
+ const filtered=useMemo(
+  ()=>data.players.filter(
+   p=>(p.name+p.ign).toLowerCase().includes(query.toLowerCase())
+  ),
+  [data.players,query]
+ );
+
+ const stats={
+  points:data.players.reduce((n,p)=>n+p.points,0),
+  battles:data.matches.length
+ };
+
+ const background=data.background
+  ?{
+    backgroundImage:
+     `linear-gradient(rgba(8,8,8,.9),rgba(8,8,8,.98)),url(${data.background})`
+   }
+  :{};
+
+ const modalSelected=
+  modal==="match"||modal==="pokemon"
+   ?selectedCategory
+   :modal==="edit-match"||modal==="delete-match"
+    ?selectedMatch
+    :selectedPlayer;
+
+ return (
+  <main className="site" style={background}>
+
+   <header>
+    <button
+     className="brand"
+     onClick={()=>setView("hall")}
+    >
+     <span>◉</span>
+
+     <div>
+      Pallet Town Cafe
+      <small>SVR COMPETITIVE HUB</small>
+     </div>
+    </button>
+
+    <nav>
+     {[
+      ["hall","Hall of Fame"],
+      ["battle","Battle Leaderboards"],
+      ["players","Players"],
+      ["history","History"],
+      ["backup","Backup"]
+     ].map(([id,label])=>
+      <button
+       key={id}
+       className={view===id?"active":""}
+       onClick={()=>setView(id)}
+      >
+       {label}
+      </button>
+     )}
+    </nav>
+
+    <button
+     className="admin"
+     onClick={()=>setModal(data.isAdmin?"control":"login")}
+    >
+     {data.isAdmin?"Admin Controls":"Admin Sign In"}
+    </button>
+   </header>
+
+
+   <section className="hero">
+
+    <div>
+     <p className="eyebrow">THE LIFETIME RANKINGS</p>
+
+     <h1>
+      {view==="hall"
+       ?"Hall of Fame"
+       :view==="battle"
+        ?"Battle Leaderboards"
+        :"Pallet Town Cafe"}
+     </h1>
+
+     <p className="sub">
+      Where every battle, victory, and point counts.
+     </p>
+    </div>
+
+
+    <div className="hero-stats">
+
+     <b>
+      {data.players[0]?.ign||"—"}
+      <small>Current Champion</small>
+     </b>
+
+     <b>
+      {stats.points.toLocaleString()}
+      <small>Total Points</small>
+     </b>
+
+     <b>
+      {stats.battles}
+      <small>Recorded Battles</small>
+     </b>
+
+    </div>
+
+   </section>
+
+
+   <div className="layout">
+
+    <aside>
+
+     <p>EXPLORE</p>
+
+
+     {data.categories.map(c=>
+      <button
+       key={c.id}
+       onClick={()=>{
+        setSelectedCategory(c);
+        setView("category");
+       }}
+      >
+       BATTLE · {c.name}
+      </button>
+     )}
+
+
+     {data.isAdmin&&
+      <button onClick={()=>setModal("category")}>
+       + Create Category
+      </button>
+     }
+
+
+     <div className="aside-rule"/>
+
+
+     <button onClick={()=>setModal("background")}>
+      Background
+     </button>
+
+    </aside>
+
+
+    <section className="content">
+
+     {view==="hall"&&
+      <Hall
+       players={filtered}
+       query={query}
+       setQuery={setQuery}
+       choose={choosePlayer}
+       admin={data.isAdmin}
+       open={setModal}
+      />
+     }
+
+
+     {view==="players"&&
+      <Players
+       players={filtered}
+       query={query}
+       setQuery={setQuery}
+       choose={choosePlayer}
+       admin={data.isAdmin}
+       open={setModal}
+      />
+     }
+
+
+     {view==="battle"&&
+      <Battle
+       categories={data.categories}
+       choose={c=>{
+        setSelectedCategory(c);
+        setView("category");
+       }}
+       admin={data.isAdmin}
+       open={setModal}
+      />
+     }
+
+
+     {view==="category"&&selectedCategory&&
+      <Category
+       category={
+        data.categories.find(
+         c=>c.id===selectedCategory.id
+        )||selectedCategory
+       }
+       players={data.players}
+       choose={choosePlayer}
+       admin={data.isAdmin}
+       open={setModal}
+      />
+     }
+
+
+     {view==="history"&&
+      <History
+       items={data.history}
+       matches={data.matches}
+       admin={data.isAdmin}
+       open={setModal}
+       choose={setSelectedMatch}
+      />
+     }
+
+
+     {view==="backup"&&
+      <Backup
+       admin={data.isAdmin}
+       onImport={async(file)=>{
+        const form=new FormData();
+
+        form.append("file",file);
+
+        const r=await fetch(
+         "/api/import",
+         {
+          method:"POST",
+          body:form
+         }
+        );
+
+        const out=await r.json();
+
+        if(!r.ok)throw new Error(out.error);
+
+        setNotice(out.message);
+
+        await load();
+       }}
+      />
+     }
+
+    </section>
+
+   </div>
+
+
+   {selectedPlayer&&
+    modal===null&&
+    data.players.some(
+     p=>p.id===selectedPlayer.id
+    )&&
+    <Profile
+     player={
+      data.players.find(
+       p=>p.id===selectedPlayer.id
+      )
+     }
+     categories={data.categories}
+     close={()=>setSelectedPlayer(null)}
+     admin={data.isAdmin}
+     open={setModal}
+    />
+   }
+
+
+   {modal&&
+    <Modal
+     type={modal}
+     data={data}
+     selected={modalSelected}
+     close={()=>setModal(null)}
+     api={api}
+     reload={load}
+    />
+   }
+
+
+   {notice&&
+    <div
+     className="toast"
+     onClick={()=>setNotice("")}
+    >
+     {notice}
+    </div>
+   }
+
+  </main>
+ );
 }
 function Hall({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">PERMANENT STANDINGS</p><h2>Lifetime Leaderboard</h2></div>{admin&&<div><button className="button ghost" onClick={()=>open("points")}>Award Points</button><button className="button" onClick={()=>open("player")}>New Player</button></div>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by player name or IGN…"/></label><div className="podium">{players.slice(0,3).map(p=><button key={p.id} className={`place p${p.rank}`} onClick={()=>choose(p)}><Avatar player={p}/><span className="place-copy"><i>#{p.rank}</i><strong>{p.ign}</strong><span>{p.points} pts</span></span></button>)}</div><div className="table"><div className="row labels"><span>RANK</span><span>PLAYER</span><span>STATUS</span><span>POINTS</span></div>{players.map(p=><button className="row" key={p.id} onClick={()=>choose(p)}><span className={`rank r${p.rank}`}>#{p.rank}</span><span className="player-cell"><Avatar player={p}/><span><strong>{p.name}</strong><small>{p.ign}</small></span></span><span>{p.rank===1?<em className="champion">Champion</em>:p.rank<=3?<em>Top 3</em>:p.rank<=10?<em>Top 10</em>:<em className="regular">Competitive</em>}</span><span className="points">{p.points.toLocaleString()}</span></button>)}</div></>}
 function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
