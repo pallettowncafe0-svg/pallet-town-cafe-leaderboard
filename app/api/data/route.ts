@@ -4,7 +4,20 @@ import { isAdmin } from "@/lib/auth";
 import { rankPlayers, rankRecords } from "@/lib/rankings";
 export async function GET() {
   const [rawPlayers, rawCategories, history, matches, background] = await Promise.all([
-    db.player.findMany({ where:{active:true} }), db.category.findMany({ include:{records:{include:{player:true}}} }),
+    db.player.findMany({ where:{active:true} }), db.category.findMany({
+  include:{
+    records:{
+      where:{
+        player:{
+          active:true
+        }
+      },
+      include:{
+        player:true
+      }
+    }
+  }
+}),
     db.pointTransaction.findMany({include:{player:true},orderBy:{createdAt:"desc"},take:100}), db.match.findMany({include:{category:true,winner:true,loser:true},orderBy:{playedAt:"desc"},take:100}), db.setting.findUnique({where:{key:"background"}})
   ]);
   const players=rankPlayers(rawPlayers).map((player,index)=>({...player,rank:index+1}));
