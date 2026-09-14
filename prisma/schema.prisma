@@ -18,7 +18,6 @@ model Player {
   active Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   transactions PointTransaction[]
   categoryRecords CategoryRecord[]
   winnerMatches Match[] @relation("winner")
@@ -35,18 +34,8 @@ model PointTransaction {
   action String
   actor String
   createdAt DateTime @default(now())
-
-  player Player @relation(
-    fields: [playerId],
-    references: [id],
-    onDelete: Restrict
-  )
-
-  category Category? @relation(
-    fields: [categoryId],
-    references: [id],
-    onDelete: Cascade
-  )
+  player Player @relation(fields: [playerId], references: [id], onDelete: Restrict)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 }
 
 model Category {
@@ -55,7 +44,6 @@ model Category {
   description String?
   image String?
   createdAt DateTime @default(now())
-
   records CategoryRecord[]
   matches Match[]
   pointTransactions PointTransaction[]
@@ -68,19 +56,8 @@ model CategoryRecord {
   wins Int @default(0)
   losses Int @default(0)
   pokemon String?
-
-  category Category @relation(
-    fields: [categoryId],
-    references: [id],
-    onDelete: Cascade
-  )
-
-  player Player @relation(
-    fields: [playerId],
-    references: [id],
-    onDelete: Cascade
-  )
-
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
   @@unique([categoryId, playerId])
 }
 
@@ -91,26 +68,9 @@ model Match {
   loserId String
   notes String?
   playedAt DateTime @default(now())
-
-  category Category @relation(
-    fields: [categoryId],
-    references: [id],
-    onDelete: Cascade
-  )
-
-  winner Player @relation(
-    "winner",
-    fields: [winnerId],
-    references: [id],
-    onDelete: Restrict
-  )
-
-  loser Player @relation(
-    "loser",
-    fields: [loserId],
-    references: [id],
-    onDelete: Restrict
-  )
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  winner Player @relation("winner", fields: [winnerId], references: [id], onDelete: Restrict)
+  loser Player @relation("loser", fields: [loserId], references: [id], onDelete: Restrict)
 }
 
 model Setting {
