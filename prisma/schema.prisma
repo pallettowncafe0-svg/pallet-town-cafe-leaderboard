@@ -26,13 +26,16 @@ model Player {
 model PointTransaction {
   id String @id @default(cuid())
   playerId String
+  categoryId String?
   amount Int
   newTotal Int
   reason String?
   action String
   actor String
   createdAt DateTime @default(now())
+
   player Player @relation(fields:[playerId], references:[id], onDelete: Restrict)
+  category Category? @relation(fields:[categoryId], references:[id], onDelete: Cascade)
 }
 model Category {
   id String @id @default(cuid())
@@ -40,8 +43,10 @@ model Category {
   description String?
   image String?
   createdAt DateTime @default(now())
+
   records CategoryRecord[]
   matches Match[]
+  pointTransactions PointTransaction[]
 }
 model CategoryRecord {
   id String @id @default(cuid())
