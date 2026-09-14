@@ -51,9 +51,10 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 @media(max-width:850px){.timeline article{grid-template-columns:67px minmax(0,1fr) auto}.history-actions{grid-column:2 / -1}.avatar-large{width:58px;height:58px}.place .avatar{width:38px;height:38px}}
 
 /* Layout fixes — preserve the existing Noir theme above. */
-.hero-stats{align-items:flex-start}
+.hero-stats{align-items:stretch}
 .hero-stat{
   min-width:120px;
+  height:58px;
   min-height:58px;
   display:flex;
   flex-direction:column;

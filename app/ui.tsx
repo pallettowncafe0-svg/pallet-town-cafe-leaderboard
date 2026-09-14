@@ -26,8 +26,8 @@ function showdownNames(value:string, options:PokemonOption[] = []) {
   if(!raw)return [];
 
   const match=options.find(
-    option=>option.name.toLowerCase()===raw.toLowerCase() ||
-      option.id.toLowerCase()===raw.toLowerCase()
+    option=>option.id.toLowerCase()===raw.toLowerCase() ||
+      option.name.toLowerCase()===raw.toLowerCase()
   );
   if(match)return [match.id];
 
@@ -74,7 +74,7 @@ function PokemonPicker({
       option=>option.name.toLowerCase()===next.name.toLowerCase() ||
         option.id.toLowerCase()===next.name.toLowerCase()
     );
-    setQuery(match?.name || next.name);
+    setQuery(match?.id || next.name);
     setShiny(next.shiny);
   },[initialValue,options]);
 
@@ -82,7 +82,10 @@ function PokemonPicker({
     const value=query.trim().toLowerCase();
     if(!value)return options.slice(0,30);
     return options
-      .filter(pokemon=>pokemon.name.toLowerCase().includes(value))
+      .filter(pokemon=>
+        pokemon.id.toLowerCase().includes(value) ||
+        pokemon.name.toLowerCase().includes(value)
+      )
       .slice(0,30);
   },[options,query]);
 
@@ -100,7 +103,7 @@ function PokemonPicker({
       />
       <input type="hidden" name={name} value={storedValue}/>
       <datalist id={`${name}-options`}>
-        {filtered.map(pokemon=><option key={pokemon.id} value={pokemon.name}/>)}
+        {filtered.map(pokemon=><option key={pokemon.id} value={pokemon.id} label={pokemon.name}/>)}
       </datalist>
       <div className="pokemon-variant-toggle">
         <button
@@ -257,8 +260,9 @@ useEffect(() => {
   [data.players,query]
  );
 
+ const champion=data.players[0] || null;
  const stats={
-  points:data.players.reduce((total,p)=>total+Number(p.points||0),0),
+  points:Number(champion?.points||0),
   battles:data.matches.length
  };
 
@@ -574,7 +578,7 @@ useEffect(() => {
 
      <b className="hero-stat champion-stat">
       <span className="champion-display">
-       <Avatar player={data.players[0]} />
+       <Avatar player={champion} />
        <strong>{data.players[0]?.name || "—"}</strong>
       </span>
       <small>Current Champion</small>
