@@ -50,73 +50,10 @@ em{background:#2b2925;color:#d1c8b8}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #d8b76b;outline-offset:2px}
 @media(max-width:850px){.timeline article{grid-template-columns:67px minmax(0,1fr) auto}.history-actions{grid-column:2 / -1}.avatar-large{width:58px;height:58px}.place .avatar{width:38px;height:38px}}
 
-/* Layout fixes — preserve the existing Noir theme above. */
-.hero-stats{align-items:stretch}
-.hero-stat{
-  min-width:120px;
-  height:58px;
-  min-height:58px;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-end;
-  justify-content:flex-start;
-  line-height:1.05;
-}
-.champion-stat{min-width:170px}
-.champion-display{height:42px;display:flex;align-items:center;gap:10px}
 
-.player-card{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 150px;
-  gap:10px;
-  align-items:center;
-}
-.player-card-info{min-width:0;display:block}
-.player-card-pokemon{
-  width:150px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-.player-card-pokemon .pokemon-sprites{
-  grid-template-columns:repeat(3,48px);
-  grid-template-rows:repeat(2,48px);
-  width:148px;
-  min-height:100px;
-  gap:2px 3px;
-  margin:0;
-}
-
-.battle-record-table .row{
-  grid-template-columns:70px minmax(210px,1.8fr) minmax(105px,1fr) minmax(130px,1fr) 90px;
-}
-.battle-record-table .row > span:nth-child(3){white-space:nowrap}
-.battle-record-table .row > span:nth-child(4),
-.battle-record-table .row > span:nth-child(5){text-align:right}
-
-@media(max-width:850px){
-  .hero-stat{min-width:0}
-  .champion-stat{min-width:0}
-  .player-card{grid-template-columns:minmax(0,1fr) 112px}
-  .player-card-pokemon{width:112px}
-  .player-card-pokemon .pokemon-sprites{
-    grid-template-columns:repeat(3,34px);
-    grid-template-rows:repeat(2,34px);
-    width:106px;
-    min-height:72px;
-  }
-  .player-card-pokemon .pokemon-sprites.compact .pokemon-slot,
-  .player-card-pokemon .pokemon-sprites.compact img{
-    width:34px;
-    height:34px;
-  }
-  .battle-record-table .row{
-    grid-template-columns:45px 1fr 76px;
-  }
-  .battle-record-table .row span:nth-child(4),
-  .battle-record-table .row span:nth-child(5),
-  .battle-record-table .labels span:nth-child(4),
-  .battle-record-table .labels span:nth-child(5){
-    display:none;
-  }
-}
+/* Hero stat alignment fix */
+.hero-stats{align-items:flex-start}
+.hero-stat{min-width:120px;min-height:58px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;line-height:1.05}
+.champion-stat{min-width:190px}
+.champion-display{height:42px;display:flex;align-items:center;justify-content:flex-end;gap:10px}
+@media(max-width:850px){.hero-stat{min-width:0}.champion-stat{min-width:0}.champion-display{height:38px}}

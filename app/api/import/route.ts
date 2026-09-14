@@ -127,6 +127,14 @@ export async function POST(request: NextRequest) {
     let skippedMatches = 0;
     const skippedMatchReasons = new Set<string>();
 
+    // IMPORT IS A FULL REPLACEMENT.
+    // Keep site settings such as the logo/background, but replace all leaderboard data.
+    await db.pointTransaction.deleteMany({});
+    await db.match.deleteMany({});
+    await db.categoryRecord.deleteMany({});
+    await db.category.deleteMany({});
+    await db.player.deleteMany({});
+
     const players = await db.player.findMany();
     const playerById = new Map(players.map((player) => [player.id, player]));
     const playerByIgn = new Map<string, (typeof players)[number]>();
@@ -468,7 +476,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Match History is authoritative for categories that actually had matches
-    // in the backup. Other category leaderboard snapshots remain untouched.
+    // in the imported backup. Other category leaderboard snapshots remain as imported.
     for (const categoryId of categoriesWithImportedMatches) {
       const matches = await db.match.findMany({ where: { categoryId } });
       const records = await db.categoryRecord.findMany({
@@ -525,7 +533,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       message:
-        `Import complete: ${matchesAdded} new matches, ${matchesUpdated} matches updated, ` +
+        `Import replaced the current data: ${matchesAdded} matches imported, ` +
         `${playersAdded} players added, ${playersUpdated} players updated, ` +
         `${transactionsAdded} point transactions added, ${categoryRecordsImported} category records imported, ` +
         `${pokemonUpdated} Pokémon board sets updated.${skippedMessage}`,
