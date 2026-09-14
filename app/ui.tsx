@@ -13,11 +13,13 @@ function Avatar({player,className=""}:{player:any;className?:string}) {
 function PokemonPicker({
   name,
   options,
+  initialValue = "",
 }: {
   name: string;
   options: string[];
+  initialValue?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialValue);
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
@@ -282,19 +284,16 @@ useEffect(() => {
       width: 100%;
       max-width: 100%;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      grid-template-rows: repeat(2, 58px);
-      gap: 4px 6px;
+      grid-template-rows: repeat(2, 64px);
+      gap: 4px 8px;
       margin-top: 6px;
-      min-height: 120px;
+      min-height: 132px;
       overflow: hidden;
     }
-    .place .pokemon-slot {
-      width: 58px;
-      height: 58px;
-    }
+    .place .pokemon-slot,
     .place .pokemon-sprites img {
-      width: 58px;
-      height: 58px;
+      width: 64px;
+      height: 64px;
     }
     .hall-pokemon-button {
       grid-column: 2;
@@ -358,6 +357,17 @@ useEffect(() => {
     .champion-display .avatar {
       width: 42px;
       height: 42px;
+    }
+    .place .avatar,
+    .top-three article .avatar {
+      width: 56px;
+      height: 56px;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    .place .avatar-fallback,
+    .top-three article .avatar-fallback {
+      border: 1px solid rgba(215, 177, 83, .45) !important;
     }
    `}</style>
 
@@ -657,7 +667,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
                 <span>{p.points} pts</span>
               </span>
             </button>
-            {p.hallPokemon?.length ? <PokemonSprites pokemon={p.hallPokemon} compact /> : null}
+            {p.hallPokemon?.length ? <PokemonSprites pokemon={p.hallPokemon} /> : null}
             {admin&&<button type="button" className="button ghost hall-pokemon-button" onClick={(event)=>{event.stopPropagation();choose(p);open("pokemon")}}>Set Pokémon</button>}
           </article>
         ))}
@@ -960,7 +970,7 @@ function Modal({
  pokemonOptions,
  selectedPlayer,
  selectedCategory,
-}:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(""); const [pokemonPlayerTarget,setPokemonPlayerTarget]=useState(""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(""); useEffect(()=>{if(type==="pokemon"){setPokemonTarget(selectedCategory?.id||"hall");setPokemonPlayerTarget(selectedPlayer?.id||"");}if(type==="match"){setMatchCategoryTarget(selectedCategory?.id||"");}if(type==="points"||type==="category-points"){setReason("");}},[type,selectedCategory?.id,selectedPlayer?.id]); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+}:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(""); const [pokemonPlayerTarget,setPokemonPlayerTarget]=useState(""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(""); useEffect(()=>{if(type==="pokemon"){setPokemonTarget(selectedCategory?.id||"hall");setPokemonPlayerTarget(selectedPlayer?.id||"");}if(type==="match"){setMatchCategoryTarget(selectedCategory?.id||"");}if(type==="points"||type==="category-points"){setReason("");}},[type,selectedCategory?.id,selectedPlayer?.id]); const selectedRoster=useMemo(()=>{if(!pokemonPlayerTarget)return []; if(pokemonTarget==="hall"){const player=data.players.find((p:any)=>p.id===pokemonPlayerTarget);return Array.isArray(player?.hallPokemon)?player.hallPokemon:[];} const category=data.categories.find((c:any)=>c.id===pokemonTarget); const record=category?.records?.find((r:any)=>r.playerId===pokemonPlayerTarget); return Array.isArray(record?.pokemon)?record.pokemon:[];},[data.players,data.categories,pokemonTarget,pokemonPlayerTarget]); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
   if (type === "control") {
     return (
       <div className="modal">
@@ -1311,7 +1321,7 @@ if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.
             </select>
           </label>
           <div className="pokemon-editor-grid">
-            {[1,2,3,4,5,6].map(n=><PokemonPicker key={n} name={`p${n}`} options={pokemonOptions}/>)}
+            {[1,2,3,4,5,6].map(n=><PokemonPicker key={`${pokemonTarget}-${pokemonPlayerTarget}-${n}-${selectedRoster[n-1]||""}`} name={`p${n}`} options={pokemonOptions} initialValue={selectedRoster[n-1]||""}/>)}
           </div>
           <p className="muted">Choose Hall of Fame for the player's permanent Hall roster, or choose a battle board for that board's roster.</p>
           <button className="button">Save Roster</button>
