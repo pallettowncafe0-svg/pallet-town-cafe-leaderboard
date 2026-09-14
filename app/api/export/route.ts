@@ -1,7 +1,143 @@
 import { NextResponse } from "next/server";
+import * as XLSX from "xlsx";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { rankPlayers,rankRecords } from "@/lib/rankings";
-import * as XLSX from "xlsx";
-export async function GET(){ try { await requireAdmin(); const [players,categories,history,matches]=await Promise.all([db.player.findMany({where:{active:true}}),db.category.findMany({include:{records:{include:{player:true}}}}),db.pointTransaction.findMany({include:{player:true}}),db.match.findMany({include:{category:true,winner:true,loser:true}})]); const book=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rankPlayers<any>(players).map((p:any,i:number)=>({Rank:i+1,"Full Name":p.name,IGN:p.ign,"Lifetime Points":p.points,"Best Performance":p.bestPerformance,"Date Added":p.createdAt,"Last Updated":p.updatedAt}))),"Lifetime Leaderboard"); XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(history.map((h:any)=>({Date:h.createdAt,Player:h.player.name,"Points Change":h.amount,"New Total":h.newTotal,Reason:h.reason,Action:h.action,Admin:h.actor}))),"Point History"); XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(categories.flatMap((c:any)=>rankRecords<any>(c.records).map((r:any,i:number)=>({Category:c.name,Rank:i+1,Player:r.player.name,Wins:r.wins,Losses:r.losses,"Win Rate":r.wins+r.losses?`${Math.round(r.wins/(r.wins+r.losses)*100)}%`:"0%"})))),"Category Leaderboards"); XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(matches.map((m:any)=>({Category:m.category.name,Winner:m.winner.name,Loser:m.loser.name,Date:m.playedAt,Notes:m.notes}))),"Match History"); XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(categories.flatMap((c:any)=>c.records.map((r:any)=>({Category:c.name,Player:r.player.name,...Object.fromEntries((r.pokemon?JSON.parse(r.pokemon):[]).map((p:string,i:number)=>[`Pokemon ${i+1}`,p]))})))),"Pokemon Records"); const bytes=XLSX.write(book,{type:"buffer",bookType:"xlsx"}); return new NextResponse(bytes,{headers:{"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Content-Disposition":"attachment; filename=ptc-leaderboard.xlsx"}}); }catch{return NextResponse.json({error:"Admin authorization required"},{status:401});} }
 
+export const runtime = "nodejs";
+
+function parsePokemon(value: string | null) {
+  if (!value) return { name: "", shiny: "No" };
+  const shiny = value.endsWith("|shiny");
+  return {
+    name: shiny ? value.slice(0, -6) : value,
+    shiny: shiny ? "Yes" : "No",
+  };
+}
+
+function pokemonColumns(value: string | null) {
+  const list = value ? JSON.parse(value) : [];
+  const result: Record<string, string> = {};
+  for (let index = 1; index <= 6; index += 1) {
+    const parsed = parsePokemon(list[index - 1] || "");
+    result[`Pokemon ${index}`] = parsed.name;
+    result[`Shiny ${index}`] = parsed.shiny;
+  }
+  return result;
+}
+
+export async function GET() {
+  try {
+    await requireAdmin();
+
+    const [players, categories, transactions, matches, records] = await Promise.all([
+      db.player.findMany({ where: { active: true }, orderBy: [{ points: "desc" }, { name: "asc" }] }),
+      db.category.findMany({ include: { records: { where: { player: { active: true } }, include: { player: true } } }, orderBy: { name: "asc" } }),
+      db.pointTransaction.findMany({ include: { player: true, category: true }, orderBy: { createdAt: "desc" } }),
+      db.match.findMany({ include: { category: true, winner: true, loser: true }, orderBy: { playedAt: "desc" } }),
+      db.categoryRecord.findMany({ where: { player: { active: true } }, include: { category: true, player: true }, orderBy: { category: { name: "asc" } } }),
+    ]);
+
+    const lifetime = players.map((player, index) => ({
+      "Rank": index + 1,
+      "Full Name": player.name,
+      "IGN": player.ign || "",
+      "Lifetime Points": player.points,
+      "Best Performance": player.bestPerformance || "",
+      "Date Added": player.createdAt,
+      "Last Updated": player.updatedAt,
+    }));
+
+    const pointHistory = transactions.map((transaction) => ({
+      "Transaction ID": transaction.id,
+      "Date": transaction.createdAt,
+      "Player": transaction.player.name,
+      "Points Change": transaction.amount,
+      "New Total": transaction.newTotal,
+      "Reason": transaction.reason || "",
+      "Action": transaction.action,
+      "Admin": transaction.actor,
+    }));
+
+    const categoryLeaderboard: Record<string, unknown>[] = [];
+    for (const category of categories) {
+      const sorted = [...category.records].sort((a, b) => {
+        const aGames = a.wins + a.losses;
+        const bGames = b.wins + b.losses;
+        const aRate = aGames ? a.wins / aGames : 0;
+        const bRate = bGames ? b.wins / bGames : 0;
+        return bRate - aRate || b.wins - a.wins || a.player.name.localeCompare(b.player.name);
+      });
+
+      sorted.forEach((record, index) => {
+        const games = record.wins + record.losses;
+        categoryLeaderboard.push({
+          "Category": category.name,
+          "Rank": index + 1,
+          "Player": record.player.name,
+          "Wins": record.wins,
+          "Losses": record.losses,
+          "Win Rate": games ? `${Math.round((record.wins / games) * 100)}%` : "0%",
+        });
+      });
+    }
+
+    const matchHistory = matches.map((match) => ({
+      "Match ID": match.id,
+      "Category": match.category.name,
+      "Winner": match.winner.name,
+      "Loser": match.loser.name,
+      "Date": match.playedAt,
+      "Notes": match.notes || "",
+    }));
+
+    const pokemonRecords: Record<string, unknown>[] = [];
+
+    for (const player of players) {
+      const set = pokemonColumns(player.hallPokemon);
+      pokemonRecords.push({
+        Board: "Hall of Fame",
+        Player: player.name,
+        IGN: player.ign || "",
+        ...set,
+      });
+    }
+
+    for (const record of records) {
+      const set = pokemonColumns(record.pokemon);
+      pokemonRecords.push({
+        Board: record.category.name,
+        Player: record.player.name,
+        IGN: record.player.ign || "",
+        ...set,
+      });
+    }
+
+    const workbook = XLSX.utils.book_new();
+    const addSheet = (name: string, data: Record<string, unknown>[]) => {
+      const sheet = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(workbook, sheet, name);
+    };
+
+    addSheet("Lifetime Leaderboard", lifetime);
+    addSheet("Point History", pointHistory);
+    addSheet("Category Leaderboards", categoryLeaderboard);
+    addSheet("Match History", matchHistory);
+    addSheet("Pokemon Records", pokemonRecords);
+
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const filename = `ptc-leaderboard-backup-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    return new NextResponse(buffer, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Export failed" },
+      { status: 400 }
+    );
+  }
+}

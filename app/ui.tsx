@@ -581,7 +581,7 @@ useEffect(() => {
 
     <div className="hero-stats">
 
-     <b>
+     <b className="hero-stat champion-stat">
       <span className="champion-display">
        <Avatar player={data.players[0]} />
        <strong>{data.players[0]?.name || "—"}</strong>
@@ -589,12 +589,12 @@ useEffect(() => {
       <small>Current Champion</small>
      </b>
 
-     <b>
+     <b className="hero-stat">
       {stats.points.toLocaleString()}
       <small>Total Points</small>
      </b>
 
-     <b>
+     <b className="hero-stat">
       {stats.battles}
       <small>Recorded Battles</small>
      </b>
@@ -829,7 +829,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
     </>
   );
 }
-function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
+function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><span className="player-card-info"><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign || "No IGN"}</small><b>{p.points} pts</b></span>{p.hallPokemon?.length ? <span className="player-card-pokemon"><PokemonSprites pokemon={p.hallPokemon} compact /></span> : null}</button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>BATTLE</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
 function Category({
   category,
@@ -899,7 +899,7 @@ function Category({
 
       <h3>Battle Record</h3>
 
-      <div className="table">
+      <div className="table battle-record-table">
         <div className="row labels">
           <span>RANK</span>
           <span>PLAYER</span>

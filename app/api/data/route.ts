@@ -52,7 +52,6 @@ export async function GET() {
       orderBy: {
         playedAt: "desc",
       },
-      take: 100,
     }),
 
     db.setting.findUnique({
