@@ -448,12 +448,12 @@ function HigherLowerGame({highScores,onScoresChange,art,isAdmin,hideHighScoreDet
 
               <article className={`game-pokemon next-pokemon${revealed?(correct?" correct":" wrong"):""}`}>
                 <span className="game-card-label">NEXT</span>
-                {revealed&&next ? (
+                {next ? (
                   <>
                     {next.sprite&&<img src={next.sprite} alt={gameDisplayName(next.name)}/>} 
                     <h3>{gameDisplayName(next.name)}</h3>
                     <div className="game-types">{next.types.map(type=><span key={type}>{type}</span>)}</div>
-                    <b>{formatValue(next,metric.key)}</b>
+                    <b>{revealed ? formatValue(next,metric.key) : "?"}</b>
                   </>
                 ) : (
                   <div className="game-hidden-pokemon">?</div>
@@ -516,7 +516,7 @@ function HigherLowerGame({highScores,onScoresChange,art,isAdmin,hideHighScoreDet
               <div className={`highscore-row${entry?" filled":" empty"}`} key={entry?`${entry.createdAt}-${index}`:`empty-${index}`}>
                 <span className="highscore-rank">{String(index+1).padStart(2,"0")}</span>
                 <span className="highscore-player">
-                  {hideHighScoreDetails && !isAdmin ? <strong>—</strong> : <>
+                  {hideHighScoreDetails ? <strong>—</strong> : <>
                     <strong>{entry?.name||"—"}</strong>
                     <small>{entry?.note||""}</small>
                   </>}
@@ -1598,7 +1598,7 @@ function Modal({
           <div className="pokecompare-admin-setting">
             <div>
               <strong>Hide High Score Names & Messages</strong>
-              <p className="muted">When enabled, the public high-score board shows scores only. Useful for scoring/verification.</p>
+              <p className="muted">When enabled, the high-score board shows scores only. Admins can still edit entries.</p>
             </div>
             <label className="toggle">
               <input type="checkbox" checked={data.pokeCompareHideDetails} onChange={async(event)=>{
@@ -1610,6 +1610,7 @@ function Modal({
                   });
                   const result=await response.json();
                   if(!response.ok)throw new Error(result.error||"Could not update setting.");
+                  setData(current=>({...current,pokeCompareHideDetails:result.hideDetails===true}));
                   await reload();
                 }catch(error){alert(error instanceof Error?error.message:"Could not update setting.");}
               }}/>
