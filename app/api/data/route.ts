@@ -10,6 +10,7 @@ export async function GET() {
     history,
     matches,
     background,
+    logo,
     categoryTransactions,
   ] = await Promise.all([
     db.player.findMany({
@@ -57,6 +58,12 @@ export async function GET() {
     db.setting.findUnique({
       where: {
         key: "background",
+      },
+    }),
+
+    db.setting.findUnique({
+      where: {
+        key: "logo",
       },
     }),
 
@@ -153,6 +160,7 @@ export async function GET() {
     history,
     matches,
     background: background?.value || null,
+    logo: logo?.value || null,
     isAdmin: await isAdmin(),
   });
 }

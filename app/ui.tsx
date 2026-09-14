@@ -1,7 +1,7 @@
 "use client";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;isAdmin:boolean};
-const empty:Data={players:[],categories:[],history:[],matches:[],background:null,isAdmin:false};
+type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean};
+const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
 function Avatar({player,className=""}:{player:any;className?:string}) {
@@ -9,6 +9,62 @@ function Avatar({player,className=""}:{player:any;className?:string}) {
  if(player?.image&&!broken) return <img className={`avatar ${className}`} src={player.image} alt={`${player.name||player.ign||"Player"} display picture`} onError={()=>setBroken(true)}/>;
  return <span className={`avatar avatar-fallback ${className}`} aria-label={`${player?.name||player?.ign||"Player"} initials`}>{initials(player)}</span>;
 }
+
+function PokemonPicker({
+  name,
+  options,
+}: {
+  name: string;
+  options: string[];
+}) {
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const value = query.trim().toLowerCase();
+    if (!value) return options.slice(0, 30);
+    return options
+      .filter((pokemon) => pokemon.toLowerCase().includes(value))
+      .slice(0, 30);
+  }, [options, query]);
+
+  return (
+    <label className="pokemon-picker">
+      <span>{name.replace("p", "Pokémon ")}</span>
+      <input
+        list={`${name}-options`}
+        name={name}
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search Pokémon..."
+        autoComplete="off"
+      />
+      <datalist id={`${name}-options`}>
+        {filtered.map((pokemon) => (
+          <option key={pokemon} value={pokemon} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
+function PokemonSprites({ pokemon }: { pokemon: string[] }) {
+  return (
+    <div className="pokemon-sprites">
+      {pokemon.map((name) => (
+        <img
+          key={name}
+          src={`https://play.pokemonshowdown.com/sprites/xyani/${name.toLowerCase()}.gif`}
+          alt={name}
+          title={name}
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function LeaderboardApp(){
  const [data,setData]=useState<Data>(empty);
  const [view,setView]=useState("hall");
@@ -115,6 +171,27 @@ export default function LeaderboardApp(){
 
  return (
   <main className="site" style={background}>
+   <style>{`
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1) brightness(0.8);
+      opacity: 0.9;
+    }
+    .site-logo {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+    .champion-display {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .champion-display .avatar {
+      width: 42px;
+      height: 42px;
+    }
+   `}</style>
 
    <header>
     <button
@@ -178,7 +255,10 @@ export default function LeaderboardApp(){
     <div className="hero-stats">
 
      <b>
-      {data.players[0]?.ign||"—"}
+      <span className="champion-display">
+       <Avatar player={data.players[0]} />
+       <strong>{data.players[0]?.name || "—"}</strong>
+      </span>
       <small>Current Champion</small>
      </b>
 
@@ -669,7 +749,79 @@ function History({
 function Profile({player,categories,close,admin,open}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="drawer"><button className="x" onClick={close}>×</button><div className="profile-heading"><Avatar player={player} className="avatar-large"/><div><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign}</p></div></div><div className="profile-score"><b>#{player.rank||"—"}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div>}
 function Backup({admin,onImport}:any){const [file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false);return <><div className="section-head"><div><p className="eyebrow">DATA PORTABILITY</p><h2>Backup & Restore</h2></div></div><div className="backup"><article><h3>Export Excel Backup</h3><p>Download the complete current leaderboard, history, battle records, and Pokémon lineups in one `.xlsx` workbook.</p><a className={`button ${!admin?"disabled":""}`} href={admin?"/api/export":undefined}>Export .xlsx</a></article><article><h3>Import Backup</h3><p>Restore players, battle categories, records, and Pokémon lineups. Existing players are matched by IGN.</p><input type="file" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="button" disabled={!admin||!file||busy} onClick={async()=>{if(!confirm("Import this backup? Existing player points and category records may be updated."))return;setBusy(true);try{await onImport(file)}catch(e){alert(e instanceof Error?e.message:"Import failed")}finally{setBusy(false)}}}> {busy?"Importing…":"Confirm Import"}</button></article></div>{!admin&&<p className="empty">Sign in as an admin to access backups.</p>}</>}
 function Modal({type,data,selected,close,api,reload}:any){const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
-  if(type==="player"||type==="edit-player") {const p=type==="edit-player"?selected:null;return <div className="modal"><form onSubmit={e=>submit(e,p?"player.update":"player.create")}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" required defaultValue={p?.ign} placeholder="In-game name (IGN)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/><input name="image" type="url" defaultValue={p?.image||""} placeholder="Display picture URL (optional)"/><input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
+  if (type === "control") {
+    return (
+      <div className="modal">
+        <div className="admin-panel">
+          <h2>Admin Controls</h2>
+
+          <h3>Custom Background</h3>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const input = event.currentTarget.elements.namedItem(
+                "backgroundFile"
+              ) as HTMLInputElement;
+              const file = input.files?.[0];
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onload = () => {
+                void api("background.set", { value: reader.result });
+              };
+              reader.readAsDataURL(file);
+            }}
+          >
+            <p className="muted">
+              Upload a JPG, PNG, or WebP. A dark overlay is applied automatically.
+            </p>
+            <input
+              name="backgroundFile"
+              type="file"
+              accept="image/*"
+              required
+            />
+            <button className="button">Use Background</button>
+          </form>
+
+          <h3>PTC Logo</h3>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const input = event.currentTarget.elements.namedItem(
+                "logoFile"
+              ) as HTMLInputElement;
+              const file = input.files?.[0];
+              if (!file) return;
+
+              const reader = new FileReader();
+              reader.onload = () => {
+                void api("logo.set", { value: reader.result });
+              };
+              reader.readAsDataURL(file);
+            }}
+          >
+            <p className="muted">
+              Upload the logo shown in the top-left of the site.
+            </p>
+            <input
+              name="logoFile"
+              type="file"
+              accept="image/*"
+              required
+            />
+            <button className="button">Use PTC Logo</button>
+          </form>
+
+          <button type="button" className="link" onClick={close}>
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if(type==="player"||type==="edit-player") {const p=type==="edit-player"?selected:null;return <div className="modal"><form onSubmit={e=>submit(e,p?"player.update":"player.create")}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" defaultValue={p?.ign||""} placeholder="In-game name (optional)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/><input name="image" type="url" defaultValue={p?.image||""} placeholder="Display picture URL (optional)"/><input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
  if(type==="delete-player")return <div className="modal"><form onSubmit={e=>{e.preventDefault();api("player.delete",{id:selected.id})}}><h2>Delete {selected.ign}?</h2><p>This safely removes them from active rankings while keeping historical transactions intact.</p><button className="danger">Confirm deletion</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 if (type === "category-points") {
     if (!selected) return null;
@@ -930,7 +1082,7 @@ if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.
         </form>
       </div>
     );
-  }const f=new FormData(e.currentTarget);api("pokemon.set",{categoryId:selected.id,playerId:f.get("playerId"),pokemon:[1,2,3,4,5,6].map(n=>f.get(`p${n}`))})}}><h2>Set Pokémon Roster</h2><select name="playerId" required><option value="">Select player</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign}</option>)}</select>{[1,2,3,4,5,6].map(n=><input key={n} name={`p${n}`} placeholder={`Pokémon ${n}`}/>)}<button className="button">Save Roster</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+  }
  return <div className="modal"><form onSubmit={async(e)=>{e.preventDefault();const file=(e.currentTarget.elements.namedItem("file") as HTMLInputElement).files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>api("background.set",{value:reader.result});reader.readAsDataURL(file)}}><h2>Custom Background</h2><p>Upload a JPG, PNG, or WebP. A dark overlay is applied automatically.</p><input name="file" type="file" accept="image/*" required/><button className="button">Use Background</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 }
 

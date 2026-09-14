@@ -80,9 +80,9 @@ function isAdminError(error: unknown) {
 
 export async function POST(request:NextRequest) {
  try { await requireAdmin(); const {action,payload={}}=await request.json();
-   if(action==="player.create") { const player=await db.player.create({data:{name:payload.name,ign:payload.ign,points:Number(payload.points)||0,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null}}); if(player.points) await db.pointTransaction.create({data:{playerId:player.id,amount:player.points,newTotal:player.points,reason:"Starting points",action:"Player created",actor:"Admin"}}); }
-   else if(action==="player.update") { const existing=await db.player.findUniqueOrThrow({where:{id:payload.id}}); const points=Number(payload.points); await db.player.update({where:{id:payload.id},data:{name:payload.name,ign:payload.ign,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null,points}}); if(points!==existing.points) await db.pointTransaction.create({data:{playerId:payload.id,amount:points-existing.points,newTotal:points,reason:"Profile point correction",action:"Points edited",actor:"Admin"}}); }
-  else if(action==="player.delete") { await db.player.update({where:{id:payload.id},data:{active:false,ign:`deleted-${payload.id}`}}); }
+   if(action==="player.create") { const player=await db.player.create({data:{name:payload.name,ign:payload.ign?.trim() || null,points:Number(payload.points)||0,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null}}); if(player.points) await db.pointTransaction.create({data:{playerId:player.id,amount:player.points,newTotal:player.points,reason:"Starting points",action:"Player created",actor:"Admin"}}); }
+   else if(action==="player.update") { const existing=await db.player.findUniqueOrThrow({where:{id:payload.id}}); const points=Number(payload.points); await db.player.update({where:{id:payload.id},data:{name:payload.name,ign:payload.ign?.trim() || null,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null,points}}); if(points!==existing.points) await db.pointTransaction.create({data:{playerId:payload.id,amount:points-existing.points,newTotal:points,reason:"Profile point correction",action:"Points edited",actor:"Admin"}}); }
+  else if(action==="player.delete") { await db.player.update({where:{id:payload.id},data:{active:false,ign:null}}); }
   else if(action==="points") { const player=await db.player.findUniqueOrThrow({where:{id:payload.playerId}}); const amount=Number(payload.amount); if(!Number.isInteger(amount)||amount===0) throw new Error("Enter a whole non-zero point amount"); const total=player.points+amount; await db.$transaction([db.player.update({where:{id:player.id},data:{points:total}}),db.pointTransaction.create({data:{playerId:player.id,amount,newTotal:total,reason:payload.reason||null,action:amount>0?"Points awarded":"Points removed",actor:"Admin"}})]); }
 else if(action==="category.points") {
   const player=await db.player.findUniqueOrThrow({
@@ -120,6 +120,52 @@ else if(action==="category.points") {
     })
   ]);
 }
+  else if(action==="points.update") {
+    const existing=await db.pointTransaction.findUniqueOrThrow({
+      where:{id:payload.id}
+    });
+
+    const amount=Number(payload.amount);
+
+    if(!Number.isInteger(amount)||amount===0) {
+      throw new Error("Enter a whole non-zero point amount");
+    }
+
+    await db.$transaction(async(tx)=>{
+      await tx.pointTransaction.update({
+        where:{id:payload.id},
+        data:{
+          playerId:payload.playerId,
+          amount,
+          reason:payload.reason||null,
+          action:existing.categoryId
+            ? "Category points edited"
+            : amount>0
+              ? "Points awarded"
+              : "Points removed"
+        }
+      });
+
+      await rebuildPlayerPoints(existing.playerId,tx);
+
+      if(existing.playerId!==payload.playerId) {
+        await rebuildPlayerPoints(payload.playerId,tx);
+      }
+    });
+  }
+  else if(action==="points.delete") {
+    const existing=await db.pointTransaction.findUniqueOrThrow({
+      where:{id:payload.id}
+    });
+
+    await db.$transaction(async(tx)=>{
+      await tx.pointTransaction.delete({
+        where:{id:payload.id}
+      });
+
+      await rebuildPlayerPoints(existing.playerId,tx);
+    });
+  }
   else if(action==="category.create") await db.category.create({data:{name:payload.name,description:payload.description||null}});
   else if(action==="category.update") await db.category.update({where:{id:payload.id},data:{name:payload.name,description:payload.description||null}});
   else if(action==="category.delete") {
@@ -176,6 +222,7 @@ else if(action==="category.points") {
    }
   else if(action==="pokemon.set") { const list=(payload.pokemon||[]).filter((name:string)=>name.trim()).slice(0,6); await db.categoryRecord.upsert({where:{categoryId_playerId:{categoryId:payload.categoryId,playerId:payload.playerId}},create:{categoryId:payload.categoryId,playerId:payload.playerId,pokemon:JSON.stringify(list)},update:{pokemon:JSON.stringify(list)}}); }
   else if(action==="background.set") await db.setting.upsert({where:{key:"background"},create:{key:"background",value:payload.value},update:{value:payload.value}});
+   else if(action==="logo.set") await db.setting.upsert({where:{key:"logo"},create:{key:"logo",value:payload.value},update:{value:payload.value}});
   else throw new Error("Unknown action");
    return NextResponse.json({ok:true});
   } catch(error) { return NextResponse.json({error:error instanceof Error?error.message:"Action failed"},{status:isAdminError(error)?401:400}); }
