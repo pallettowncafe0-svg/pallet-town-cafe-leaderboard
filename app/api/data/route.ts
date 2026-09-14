@@ -76,9 +76,12 @@ export async function GET() {
     }),
   ]);
 
-  const players = rankPlayers(rawPlayers).map((player, index) => ({
+  const players = rankPlayers(rawPlayers).map((player: any, index) => ({
     ...player,
     rank: index + 1,
+    hallPokemon: player.hallPokemon
+      ? JSON.parse(player.hallPokemon)
+      : [],
   }));
 
   const categories = rawCategories.map((category: any) => {

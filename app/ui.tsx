@@ -54,6 +54,7 @@ function PokemonSprites({ pokemon }: { pokemon: string[] }) {
         <img
           key={name}
           src={`https://play.pokemonshowdown.com/sprites/xyani/${name.toLowerCase()}.gif`}
+          className="pokemon-sprite"
           alt={name}
           title={name}
           onError={(event) => {
@@ -191,6 +192,46 @@ useEffect(() => {
       width: 42px;
       height: 42px;
     }
+    .site-logo {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      border-radius: 50%;
+      display: block;
+    }
+    .pokemon-sprites {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+      align-items: center;
+      justify-items: center;
+    }
+    .pokemon-sprite {
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+      display: block;
+    }
+    .hall-pokemon-button {
+      margin-top: 8px;
+    }
+    .place-main {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: transparent;
+      border: 0;
+      color: inherit;
+      text-align: left;
+      padding: 0;
+      cursor: pointer;
+    }
+    .reason-picker {
+      display: grid;
+      gap: 8px;
+    }
    `}</style>
 
    <header>
@@ -198,7 +239,11 @@ useEffect(() => {
      className="brand"
      onClick={()=>setView("hall")}
     >
-     <span>◉</span>
+     {data.logo ? (
+      <img className="site-logo" src={data.logo} alt="Pallet Town Cafe logo" />
+     ) : (
+      <span>◉</span>
+     )}
 
      <div>
       Pallet Town Cafe
@@ -455,26 +500,103 @@ useEffect(() => {
   </main>
  );
 }
-function Hall({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">PERMANENT STANDINGS</p><h2>Lifetime Leaderboard</h2></div>{admin&&<div><button
-  className="button ghost"
-  onClick={()=>open("pokemon")}
->
-  Set Pokémon
-</button>
+function Hall({players,query,setQuery,choose,admin,open}:any){
+  return (
+    <>
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">PERMANENT STANDINGS</p>
+          <h2>Lifetime Leaderboard</h2>
+        </div>
+        {admin&&
+          <div>
+            <button className="button ghost" onClick={()=>open("pokemon")}>
+              Set Pokémon
+            </button>
+            <button className="button ghost" onClick={()=>open("points")}>
+              Award Points
+            </button>
+            <button className="button" onClick={()=>open("match")}>
+              Record Battle
+            </button>
+          </div>
+        }
+      </div>
 
-<button
-  className="button ghost"
-  onClick={()=>open("points")}
->
-  Award Points
-</button>
+      <label className="search">
+        Search
+        <input
+          value={query}
+          onChange={e=>setQuery(e.target.value)}
+          placeholder="Search by player name or IGN…"
+        />
+      </label>
 
-<button
-  className="button"
-  onClick={()=>open("match")}
->
-  Record Battle
-</button></div>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by player name or IGN…"/></label><div className="podium">{players.slice(0,3).map(p=><button key={p.id} className={`place p${p.rank}`} onClick={()=>choose(p)}><Avatar player={p}/><span className="place-copy"><i>#{p.rank}</i><strong>{p.ign}</strong><span>{p.points} pts</span></span></button>)}</div><div className="table"><div className="row labels"><span>RANK</span><span>PLAYER</span><span>STATUS</span><span>POINTS</span></div>{players.map(p=><button className="row" key={p.id} onClick={()=>choose(p)}><span className={`rank r${p.rank}`}>#{p.rank}</span><span className="player-cell"><Avatar player={p}/><span><strong>{p.name}</strong><small>{p.ign}</small></span></span><span>{p.rank===1?<em className="champion">Champion</em>:p.rank<=3?<em>Top 3</em>:p.rank<=10?<em>Top 10</em>:<em className="regular">Competitive</em>}</span><span className="points">{p.points.toLocaleString()}</span></button>)}</div></>}
+      <div className="podium">
+        {players.slice(0,3).map((p:any)=>
+          <article key={p.id} className={`place p${p.rank}`}>
+            <button className="place-main" onClick={()=>choose(p)}>
+              <Avatar player={p}/>
+              <span className="place-copy">
+                <i>#{p.rank}</i>
+                <strong>{p.name}</strong>
+                <small>{p.ign || "No IGN"}</small>
+                <span>{p.points} pts</span>
+              </span>
+            </button>
+            {p.hallPokemon?.length ? (
+              <div className="hall-pokemon">
+                <PokemonSprites pokemon={p.hallPokemon} />
+              </div>
+            ) : null}
+            {admin&&
+              <button
+                className="button ghost hall-pokemon-button"
+                onClick={()=>{
+                  choose(p);
+                  open("hall-pokemon");
+                }}
+              >
+                Set Pokémon
+              </button>
+            }
+          </article>
+        )}
+      </div>
+
+      <div className="table">
+        <div className="row labels">
+          <span>RANK</span>
+          <span>PLAYER</span>
+          <span>STATUS</span>
+          <span>POINTS</span>
+        </div>
+        {players.map((p:any)=>
+          <button className="row" key={p.id} onClick={()=>choose(p)}>
+            <span className={`rank r${p.rank}`}>#{p.rank}</span>
+            <span className="player-cell">
+              <Avatar player={p}/>
+              <span>
+                <strong>{p.name}</strong>
+                <small>{p.ign || "No IGN"}</small>
+              </span>
+            </span>
+            <span>
+              {p.rank===1
+                ? <em className="champion">Champion</em>
+                : p.rank<=3
+                  ? <em>Top 3</em>
+                  : p.rank<=10
+                    ? <em>Top 10</em>
+                    : <em className="regular">Competitive</em>}
+            </span>
+            <span className="points">{p.points.toLocaleString()}</span>
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
 function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>BATTLE</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
 function Category({
@@ -531,18 +653,18 @@ function Category({
           <article key={r.id}>
             <Avatar player={r.player} />
             <b>
-              #{r.rank} · {r.player?.ign || r.playerId}
+              #{r.rank} · {r.player?.name || "Unknown player"}
             </b>
+            <small>{r.player?.ign || "No IGN"}</small>
             <strong>
               {r.wins}W – {r.losses}L{" "}
               <small>{r.winRate}% WR</small>
             </strong>
-            <p>
-              {r.pokemon.length
-                ? r.pokemon.join(" · ")
-                : "Pokémon roster not recorded"}
-            </p>
-            <PokemonSprites pokemon={r.pokemon} />
+            {r.pokemon.length ? (
+              <PokemonSprites pokemon={r.pokemon} />
+            ) : (
+              <p className="muted">Pokémon roster not recorded</p>
+            )}
           </article>
         ))}
       </div>
@@ -705,8 +827,10 @@ function History({
 
             <div>
               <strong>
-                {m.winner?.ign || m.winnerId} defeated{" "}
-                {m.loser?.ign || m.loserId}
+                {m.winner?.name || m.winner?.ign || m.winnerId}
+                {m.winner?.ign ? ` / ${m.winner.ign}` : ""} defeated{" "}
+                {m.loser?.name || m.loser?.ign || m.loserId}
+                {m.loser?.ign ? ` / ${m.loser.ign}` : ""}
               </strong>
               <p>
                 {m.category?.name || m.categoryId}
@@ -747,6 +871,31 @@ function History({
 
 function Profile({player,categories,close,admin,open}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="drawer"><button className="x" onClick={close}>×</button><div className="profile-heading"><Avatar player={player} className="avatar-large"/><div><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign}</p></div></div><div className="profile-score"><b>#{player.rank||"—"}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div>}
 function Backup({admin,onImport}:any){const [file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false);return <><div className="section-head"><div><p className="eyebrow">DATA PORTABILITY</p><h2>Backup & Restore</h2></div></div><div className="backup"><article><h3>Export Excel Backup</h3><p>Download the complete current leaderboard, history, battle records, and Pokémon lineups in one `.xlsx` workbook.</p><a className={`button ${!admin?"disabled":""}`} href={admin?"/api/export":undefined}>Export .xlsx</a></article><article><h3>Import Backup</h3><p>Restore players, battle categories, records, and Pokémon lineups. Existing players are matched by IGN.</p><input type="file" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="button" disabled={!admin||!file||busy} onClick={async()=>{if(!confirm("Import this backup? Existing player points and category records may be updated."))return;setBusy(true);try{await onImport(file)}catch(e){alert(e instanceof Error?e.message:"Import failed")}finally{setBusy(false)}}}> {busy?"Importing…":"Confirm Import"}</button></article></div>{!admin&&<p className="empty">Sign in as an admin to access backups.</p>}</>}
+function ReasonPicker({categories}:any){
+  const fillReason=(event:ChangeEvent<HTMLSelectElement>)=>{
+    const value=event.currentTarget.value;
+    if(!value)return;
+    const input=event.currentTarget.form?.elements.namedItem("reason");
+    if(input instanceof HTMLInputElement){
+      input.value=value;
+    }
+  };
+
+  return (
+    <div className="reason-picker">
+      <select name="reasonPreset" defaultValue="" onChange={fillReason}>
+        <option value="">Battle board preset (optional)</option>
+        {categories.map((category:any)=>
+          <option key={category.id} value={category.name}>
+            {category.name}
+          </option>
+        )}
+      </select>
+      <input name="reason" placeholder="Reason (optional)" />
+    </div>
+  );
+}
+
 function Modal({
  type,
  data,
@@ -884,11 +1033,7 @@ if (type === "category-points") {
             type="number"
             placeholder="Positive or negative amount"
           />
-
-          <input
-            name="reason"
-            placeholder="Reason (optional)"
-          />
+          <ReasonPicker categories={data.categories} />
 
           <p className="muted">
             These points count toward both {selected.name} and the player's
@@ -945,7 +1090,7 @@ if (type === "category-points") {
             placeholder="Positive or negative amount"
           />
 
-          <input name="reason" placeholder="Reason (optional)" />
+          <ReasonPicker categories={data.categories} />
 
           <button className="button">Save transaction</button>
           <button type="button" className="link" onClick={close}>
@@ -1038,10 +1183,10 @@ if (type === "category-points") {
   if(type==="category")return <div className="modal"><form onSubmit={e=>submit(e,"category.create")}><h2>Create Battle Category</h2><input name="name" required placeholder="Category name"/><textarea name="description" placeholder="Description"/><button className="button">Create Category</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 
 if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.preventDefault();api("category.delete",{id:selected.id})}}><h2>Delete Battle Category?</h2><p className="muted">This will permanently delete the current battle category and its battle records.</p><button className="button danger">Delete Category</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
- if(type==="match")return <div className="modal"><form onSubmit={e=>submit(e,"match.create")}><h2>Record {selected.name} Battle</h2><input type="hidden" name="categoryId" value={selected.id}/><select name="winnerId" required><option value="">Winner</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.ign}</option>)}</select><select name="loserId" required><option value="">Loser</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.ign}</option>)}</select><input name="playedAt" type="date"/><textarea name="notes" placeholder="Match notes (optional)"/><button className="button">Record Battle</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
-  if(type==="edit-match"){const m=selected;return <div className="modal"><form onSubmit={e=>submit(e,"match.update")}><h2>Edit Battle</h2><input type="hidden" name="id" value={m.id}/><label>Battle category<select name="categoryId" required defaultValue={m.categoryId}>{data.categories.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Winner<select name="winnerId" required defaultValue={m.winnerId}><option value="">Select winner</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.ign}</option>)}</select></label><label>Loser<select name="loserId" required defaultValue={m.loserId}><option value="">Select loser</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.ign}</option>)}</select></label><label>Date played<input name="playedAt" type="date" required defaultValue={new Date(m.playedAt).toISOString().slice(0,10)}/></label><textarea name="notes" defaultValue={m.notes||""} placeholder="Match notes (optional)"/><button className="button">Save Battle</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
+  if(type==="match")return <div className="modal"><form onSubmit={e=>submit(e,"match.create")}><h2>Record Battle</h2><label>Battle board<select name="categoryId" required defaultValue={selected?.id||""}><option value="">Select battle board</option>{data.categories.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Winner<select name="winnerId" required><option value="">Winner</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign||"No IGN"}</option>)}</select></label><label>Loser<select name="loserId" required><option value="">Loser</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign||"No IGN"}</option>)}</select></label><input name="playedAt" type="date"/><textarea name="notes" placeholder="Match notes (optional)"/><button className="button">Record Battle</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+  if(type==="edit-match"){const m=selected;return <div className="modal"><form onSubmit={e=>submit(e,"match.update")}><h2>Edit Battle</h2><input type="hidden" name="id" value={m.id}/><label>Battle category<select name="categoryId" required defaultValue={m.categoryId}>{data.categories.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Winner<select name="winnerId" required defaultValue={m.winnerId}><option value="">Select winner</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign||"No IGN"}</option>)}</select></label><label>Loser<select name="loserId" required defaultValue={m.loserId}><option value="">Select loser</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign||"No IGN"}</option>)}</select></label><label>Date played<input name="playedAt" type="date" required defaultValue={new Date(m.playedAt).toISOString().slice(0,10)}/></label><textarea name="notes" defaultValue={m.notes||""} placeholder="Match notes (optional)"/><button className="button">Save Battle</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
   if(type==="delete-match")return <div className="modal"><form onSubmit={e=>{e.preventDefault();api("match.delete",{id:selected.id})}}><h2>Delete this battle?</h2><p>This removes the recorded match and rebuilds the category standings from the remaining match history.</p><button className="danger">Confirm deletion</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
- if (type === "pokemon") {
+  if (type === "hall-pokemon") {
     if (!selected) return null;
 
     return (
@@ -1051,20 +1196,72 @@ if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.
             event.preventDefault();
             const form = new FormData(event.currentTarget);
 
+            void api("hall-pokemon.set", {
+              playerId: selected.id,
+              pokemon: [1, 2, 3, 4, 5, 6].map((n) => form.get(`p${n}`)),
+            });
+          }}
+        >
+          <h2>Set Hall of Fame Pokémon</h2>
+          <p className="muted">
+            {selected.name} {selected.ign ? `/ ${selected.ign}` : ""}
+          </p>
+
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <PokemonPicker
+              key={n}
+              name={`p${n}`}
+              options={pokemonOptions}
+            />
+          ))}
+
+          <button className="button">Save Roster</button>
+          <button type="button" className="link" onClick={close}>
+            Cancel
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (type === "pokemon") {
+    return (
+      <div className="modal">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+
             void api("pokemon.set", {
-              categoryId: selected.id,
+              categoryId: form.get("categoryId"),
               playerId: form.get("playerId"),
               pokemon: [1, 2, 3, 4, 5, 6].map((n) => form.get(`p${n}`)),
             });
           }}
         >
-          <h2>Set Pokémon Roster</h2>
+          <h2>Set Battle Board Pokémon</h2>
+
+          <label>
+            Battle board
+            <select
+              name="categoryId"
+              required
+              defaultValue={selected?.id || ""}
+            >
+              <option value="">Select battle board</option>
+              {data.categories.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <select name="playerId" required>
             <option value="">Select player</option>
             {data.players.map((p: any) => (
               <option key={p.id} value={p.id}>
-                {p.name} / {p.ign}
+                {p.name} / {p.ign || "No IGN"}
               </option>
             ))}
           </select>
@@ -1090,6 +1287,6 @@ if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.
       </div>
     );
   }
- return <div className="modal"><form onSubmit={async(e)=>{e.preventDefault();const file=(e.currentTarget.elements.namedItem("file") as HTMLInputElement).files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>api("background.set",{value:reader.result});reader.readAsDataURL(file)}}><h2>Custom Background</h2><p>Upload a JPG, PNG, or WebP. A dark overlay is applied automatically.</p><input name="file" type="file" accept="image/*" required/><button className="button">Use Background</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+return <div className="modal"><form onSubmit={async(e)=>{e.preventDefault();const file=(e.currentTarget.elements.namedItem("file") as HTMLInputElement).files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>api("background.set",{value:reader.result});reader.readAsDataURL(file)}}><h2>Custom Background</h2><p>Upload a JPG, PNG, or WebP. A dark overlay is applied automatically.</p><input name="file" type="file" accept="image/*" required/><button className="button">Use Background</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 }
 
