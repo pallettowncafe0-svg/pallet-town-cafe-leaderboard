@@ -12,6 +12,7 @@ export async function GET() {
     background,
     logo,
     pokeCompareHighScores,
+    pokeCompareArt,
     categoryTransactions,
   ] = await Promise.all([
     db.player.findMany({
@@ -71,6 +72,12 @@ export async function GET() {
     db.setting.findUnique({
       where: {
         key: "pokecompare_highscores",
+      },
+    }),
+
+    db.setting.findUnique({
+      where: {
+        key: "pokecompare_art",
       },
     }),
 
@@ -182,6 +189,7 @@ export async function GET() {
     background: background?.value || null,
     logo: logo?.value || null,
     pokeCompareHighScores: parsedHighScores,
+    pokeCompareArt: pokeCompareArt?.value || null,
     isAdmin: await isAdmin(),
   });
 }

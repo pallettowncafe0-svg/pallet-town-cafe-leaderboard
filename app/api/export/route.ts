@@ -29,13 +29,14 @@ export async function GET() {
   try {
     await requireAdmin();
 
-    const [players, categories, transactions, matches, records, highScoreSetting] = await Promise.all([
+    const [players, categories, transactions, matches, records, highScoreSetting, pokeCompareArtSetting] = await Promise.all([
       db.player.findMany({ where: { active: true }, orderBy: [{ points: "desc" }, { name: "asc" }] }),
       db.category.findMany({ include: { records: { where: { player: { active: true } }, include: { player: true } } }, orderBy: { name: "asc" } }),
       db.pointTransaction.findMany({ include: { player: true, category: true }, orderBy: { createdAt: "desc" } }),
       db.match.findMany({ include: { category: true, winner: true, loser: true }, orderBy: { playedAt: "desc" } }),
       db.categoryRecord.findMany({ where: { player: { active: true } }, include: { category: true, player: true }, orderBy: { category: { name: "asc" } } }),
       db.setting.findUnique({ where: { key: "pokecompare_highscores" } }),
+      db.setting.findUnique({ where: { key: "pokecompare_art" } }),
     ]);
 
     const lifetime = players.map((player, index) => ({
@@ -144,6 +145,9 @@ export async function GET() {
     addSheet("Match History", matchHistory);
     addSheet("Pokemon Records", pokemonRecords);
     addSheet("PokéCompare High Scores", highScoreRows);
+    addSheet("PokéCompare Settings", [{
+      "Artwork": pokeCompareArtSetting?.value || "",
+    }]);
 
     const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
     const filename = `ptc-leaderboard-backup-${new Date().toISOString().slice(0, 10)}.xlsx`;

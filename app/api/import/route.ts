@@ -110,8 +110,9 @@ export async function POST(request: NextRequest) {
     const matchRows = getSheet(workbook, ["Match History"]);
     const pokemonRows = getSheet(workbook, ["Pokemon Records"]);
     const highScoreRows = getSheet(workbook, ["PokéCompare High Scores", "PokeCompare High Scores"]);
+    const pokeCompareSettingsRows = getSheet(workbook, ["PokéCompare Settings", "PokeCompare Settings"]);
 
-    if (!lifetimeRows.length && !pointRows.length && !categoryRows.length && !matchRows.length && !pokemonRows.length && !highScoreRows.length) {
+    if (!lifetimeRows.length && !pointRows.length && !categoryRows.length && !matchRows.length && !pokemonRows.length && !highScoreRows.length && !pokeCompareSettingsRows.length) {
       throw new Error(
         `No supported backup sheets were found. Found: ${workbook.SheetNames.join(", ") || "none"}`
       );
@@ -140,6 +141,7 @@ export async function POST(request: NextRequest) {
       create: { key: "pokecompare_highscores", value: "[]" },
       update: { value: "[]" },
     });
+    await db.setting.deleteMany({ where: { key: "pokecompare_art" } });
 
     const players = await db.player.findMany();
     const playerById = new Map(players.map((player) => [player.id, player]));
@@ -552,6 +554,18 @@ export async function POST(request: NextRequest) {
       create: { key: "pokecompare_highscores", value: JSON.stringify(importedHighScores) },
       update: { value: JSON.stringify(importedHighScores) },
     });
+
+    const importedArt = pokeCompareSettingsRows.length
+      ? getRowValue(pokeCompareSettingsRows[0], ["Artwork", "Art", "Image"])
+      : "";
+
+    if (importedArt && importedArt.startsWith("data:image/")) {
+      await db.setting.upsert({
+        where: { key: "pokecompare_art" },
+        create: { key: "pokecompare_art", value: importedArt },
+        update: { value: importedArt },
+      });
+    }
 
     return NextResponse.json({
       ok: true,

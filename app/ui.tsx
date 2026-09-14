@@ -1,8 +1,8 @@
 "use client";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 type HighScore={score:number;name:string;note:string;createdAt:string};
-type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[]};
-const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false,pokeCompareHighScores:[]};
+type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[];pokeCompareArt:string|null};
+const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false,pokeCompareHighScores:[],pokeCompareArt:null};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
 function Avatar({player,className=""}:{player:any;className?:string}) {
@@ -216,7 +216,7 @@ function gameDisplayName(name:string){
   return String(name||"").split("-").map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(" ");
 }
 
-function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onScoresChange:(scores:HighScore[])=>void}){
+function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[];onScoresChange:(scores:HighScore[])=>void;art:string|null}){
   const [current,setCurrent]=useState<GamePokemon|null>(null);
   const [next,setNext]=useState<GamePokemon|null>(null);
   const [metric,setMetric]=useState<(typeof HIGHER_LOWER_METRICS)[number]>(HIGHER_LOWER_METRICS[0]);
@@ -239,28 +239,12 @@ function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onS
     if(Number.isFinite(saved))setBest(saved);
   },[]);
 
-  const randomId=(exclude?:number)=>{
-    let id=exclude||0;
-    while(id===exclude) id=Math.floor(Math.random()*1025)+1;
-    return id;
-  };
-
-  const fetchPokemon=async(id:number):Promise<GamePokemon>=>{
-    const response=await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`,{cache:"no-store"});
-    if(!response.ok)throw new Error("Could not load Pokémon.");
-    const item=await response.json();
-    const stats:Record<string,number>={};
-    for(const entry of item.stats||[]) stats[entry.stat.name]=Number(entry.base_stat)||0;
-    stats.bst=Object.values(stats).reduce((sum,value)=>sum+value,0);
-    return {
-      id:Number(item.id),
-      name:item.name,
-      height:Number(item.height)||0,
-      weight:Number(item.weight)||0,
-      stats,
-      sprite:item.sprites?.other?.["official-artwork"]?.front_default||item.sprites?.front_default||"",
-      types:Array.isArray(item.types)?item.types.map((x:any)=>x.type.name):[],
-    };
+  const fetchRound=async(currentId?:number)=>{
+    const query=currentId?`?currentId=${currentId}`:"";
+    const response=await fetch(`/api/pokecompare/round${query}`,{cache:"no-store"});
+    const result=await response.json();
+    if(!response.ok)throw new Error(result.error||"Could not load Pokémon.");
+    return result as {current:GamePokemon;next:GamePokemon;metric:(typeof HIGHER_LOWER_METRICS)[number]};
   };
 
   const valueFor=(pokemon:GamePokemon,key:string)=>key==="height"?pokemon.height:key==="weight"?pokemon.weight:pokemon.stats[key]||0;
@@ -274,17 +258,10 @@ function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onS
   const loadRound=async(first?:GamePokemon)=>{
     setLoading(true);setError("");setRevealed(false);setCorrect(null);setGameOver(false);setSubmitted(false);
     try{
-      const base=first||await fetchPokemon(randomId());
-      const chosen=HIGHER_LOWER_METRICS[Math.floor(Math.random()*HIGHER_LOWER_METRICS.length)];
-      let challenger=await fetchPokemon(randomId(base.id));
-      let tries=0;
-      while(valueFor(challenger,chosen.key)===valueFor(base,chosen.key)&&tries<8){
-        challenger=await fetchPokemon(randomId(base.id));
-        tries+=1;
-      }
-      setCurrent(base);setNext(challenger);setMetric(chosen);
-    }catch{
-      setError("Could not load the Pokémon. Try again.");
+      const round=await fetchRound(first?.id);
+      setCurrent(round.current);setNext(round.next);setMetric(round.metric);
+    }catch(err){
+      setError(err instanceof Error?err.message:"Could not load the Pokémon. Try again.");
     }finally{setLoading(false);}
   };
 
@@ -313,6 +290,11 @@ function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onS
     if(!current||!next)return;
     if(correct){await loadRound(next);return;}
     setStarted(false);setCurrent(null);setNext(null);setRevealed(false);setCorrect(null);setGameOver(false);
+  };
+
+  const loadState=async()=>{
+    setScore(0);setStarted(true);setGameOver(false);setQualifies(false);setSubmitted(false);setPlayerName("");setPlayerNote("");
+    await loadRound();
   };
 
   const submitHighScore=async(event:FormEvent)=>{
@@ -421,6 +403,7 @@ function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onS
               </div>
             )}
             {error&&<p className="game-error">{error}</p>}
+            <button type="button" className="pokecompare-load-state" onClick={()=>void loadState()} disabled={loading}>LOAD STATE</button>
           </>
         )}
       </div>
@@ -444,6 +427,7 @@ function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onS
           })}
         </div>
         <div className="highscore-footer">INSERT COINS · BEAT YOUR SCORE</div>
+        <div className={`highscore-art${art?" has-image":""}`} aria-label={art?"PokéCompare arcade artwork":"PokéCompare artwork area"} style={art?{backgroundImage:`url(${art})`}:undefined} />
       </aside>
     </div>
   );
@@ -940,7 +924,7 @@ useEffect(() => {
      }
 
 
-     {view==="games"&&<HigherLowerGame highScores={data.pokeCompareHighScores} onScoresChange={scores=>setData(current=>({...current,pokeCompareHighScores:scores}))}/>}
+     {view==="games"&&<HigherLowerGame highScores={data.pokeCompareHighScores} art={data.pokeCompareArt} onScoresChange={scores=>setData(current=>({...current,pokeCompareHighScores:scores}))}/>}
 
 
      {view==="battle"&&
@@ -1471,6 +1455,37 @@ function Modal({
               required
             />
             <button className="button">Use PTC Logo</button>
+          </form>
+
+          <h3>PokéCompare Artwork</h3>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const input = event.currentTarget.elements.namedItem("pokeCompareArtFile") as HTMLInputElement;
+              const file = input.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = async () => {
+                try {
+                  const response = await fetch("/api/admin/pokecompare-art", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ value: reader.result }),
+                  });
+                  const result = await response.json();
+                  if (!response.ok) throw new Error(result.error || "Could not save artwork.");
+                  await reload();
+                  close();
+                } catch (error) {
+                  alert(error instanceof Error ? error.message : "Could not save artwork.");
+                }
+              };
+              reader.readAsDataURL(file);
+            }}
+          >
+            <p className="muted">Optional image for the transparent orange arcade panel under the high scores.</p>
+            <input name="pokeCompareArtFile" type="file" accept="image/*" required />
+            <button className="button">Use PokéCompare Artwork</button>
           </form>
 
           <div className="admin-control-actions">
