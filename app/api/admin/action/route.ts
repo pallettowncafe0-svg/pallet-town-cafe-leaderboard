@@ -50,6 +50,30 @@ const [matches, existingRecords] = await Promise.all([
  }
 }
 
+async function rebuildPlayerPoints(playerId: string, tx: any) {
+  const transactions = await tx.pointTransaction.findMany({
+    where: { playerId },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, amount: true },
+  });
+
+  let total = 0;
+
+  for (const transaction of transactions) {
+    total += transaction.amount;
+
+    await tx.pointTransaction.update({
+      where: { id: transaction.id },
+      data: { newTotal: total },
+    });
+  }
+
+  await tx.player.update({
+    where: { id: playerId },
+    data: { points: total },
+  });
+}
+
 function isAdminError(error: unknown) {
  return error instanceof Error && error.message === "Admin authorization required";
 }
