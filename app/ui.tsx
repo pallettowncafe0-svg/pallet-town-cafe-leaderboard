@@ -6,18 +6,20 @@ const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"s
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
 function Avatar({player,className=""}:{player:any;className?:string}) {
  const [broken,setBroken]=useState(false);
- if(player?.image&&!broken) return <img className={`avatar ${className}`} src={player.image} alt={`${player.name||player.ign||"Player"} display picture`} onError={()=>setBroken(true)}/>;
+ if(player?.image&&!broken) return <img className={`avatar ${className}`} src={player.image} alt={`${player.name||player.ign||"Player"} display picture`} style={{border:"0",outline:"none",boxShadow:"none",borderRadius:"50%",objectFit:"cover"}} onError={()=>setBroken(true)}/>;
  return <span className={`avatar avatar-fallback ${className}`} aria-label={`${player?.name||player?.ign||"Player"} initials`}>{initials(player)}</span>;
 }
 
 function PokemonPicker({
   name,
   options,
+  initialValue = "",
 }: {
   name: string;
   options: string[];
+  initialValue?: string;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialValue);
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase();
@@ -47,21 +49,28 @@ function PokemonPicker({
   );
 }
 
-function PokemonSprites({ pokemon }: { pokemon: string[] }) {
+function PokemonSprites({ pokemon, compact=false }: { pokemon: string[]; compact?: boolean }) {
+  if (!pokemon?.length) return null;
   return (
-    <span className="pokemon-sprites">
-      {pokemon.map((name) => (
-        <img
-          key={name}
-          src={`https://play.pokemonshowdown.com/sprites/xyani/${name.toLowerCase()}.gif`}
-          alt={name}
-          title={name}
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
-        />
-      ))}
-    </span>
+    <div className={`pokemon-sprites${compact ? " compact" : ""}`}>
+      {Array.from({ length: 6 }, (_, index) => {
+        const name = pokemon[index];
+        return (
+          <span className="pokemon-slot" key={`${name || "empty"}-${index}`}>
+            {name ? (
+              <img
+                src={`https://play.pokemonshowdown.com/sprites/xyani/${name.toLowerCase()}.gif`}
+                alt={name}
+                title={name}
+                onError={(event) => {
+                  event.currentTarget.style.visibility = "hidden";
+                }}
+              />
+            ) : null}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
@@ -181,109 +190,185 @@ useEffect(() => {
       height: 42px;
       object-fit: contain;
       border-radius: 50%;
-    }
-
-    /* Player profile pictures: one clean image, no extra avatar ring. */
-    .avatar {
-      width: 48px !important;
-      height: 48px !important;
-      min-width: 48px !important;
-      min-height: 48px !important;
       display: block;
-      object-fit: cover;
-      border: 0 !important;
-      outline: 0 !important;
-      box-shadow: none !important;
-      background: transparent !important;
-      border-radius: 50%;
-    }
-
-    .avatar.avatar-fallback {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid rgba(212, 174, 87, .35) !important;
-      background: rgba(212, 174, 87, .08) !important;
-      color: #d4ae57;
-    }
-
-    .place > .avatar {
-      width: 52px !important;
-      height: 52px !important;
-      min-width: 52px !important;
-      min-height: 52px !important;
-    }
-
-    .player-cell > .avatar {
-      width: 44px !important;
-      height: 44px !important;
-      min-width: 44px !important;
-      min-height: 44px !important;
-    }
-
-    .champion-display .avatar {
-      width: 48px !important;
-      height: 48px !important;
-      min-width: 48px !important;
-      min-height: 48px !important;
-    }
-
-    .profile-heading .avatar-large {
-      width: 72px !important;
-      height: 72px !important;
-      min-width: 72px !important;
-      min-height: 72px !important;
-    }
-
-    .record .avatar,
-    .player-card > .avatar {
-      width: 48px !important;
-      height: 48px !important;
-      min-width: 48px !important;
-      min-height: 48px !important;
-    }
-    .brand-mark {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 42px;
-      height: 42px;
       flex: 0 0 42px;
     }
     .pokemon-sprites {
       display: grid;
-      grid-template-columns: repeat(6, 64px);
-      gap: 8px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      width: 100%;
+      max-width: 100%;
+      gap: 6px;
       align-items: center;
-      justify-content: start;
-      min-height: 72px;
+      justify-items: center;
+      margin-top: 10px;
+      min-height: 62px;
+      overflow: hidden;
+    }
+    .pokemon-slot {
+      width: 56px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
     }
     .pokemon-sprites img {
-      width: 64px;
-      height: 64px;
+      width: 56px;
+      height: 56px;
+      max-width: 100%;
+      max-height: 100%;
       object-fit: contain;
+      display: block;
+    }
+    .pokemon-sprites.compact {
+      margin-top: 8px;
+      min-height: 50px;
+      gap: 4px;
+    }
+    .pokemon-sprites.compact .pokemon-slot,
+    .pokemon-sprites.compact img {
+      width: 48px;
+      height: 48px;
+    }
+    .pokemon-editor-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .hall-pokemon-button {
+      margin-top: 8px;
+      align-self: center;
+    }
+    /* Keep Hall of Fame podium cards visually identical to the battle-board cards:
+       player info on top, then a clean 3x2 Pokémon grid underneath. */
+    .place {
+      min-width: 0;
+      min-height: 245px;
+      overflow: hidden;
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto auto auto;
+      align-content: start;
+      gap: 8px 10px;
+      padding: 18px !important;
+      box-sizing: border-box;
+    }
+    .place-main {
+      width: 100%;
+      min-width: 0;
+      grid-column: 1;
+      grid-row: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: transparent;
+      border: 0;
+      color: inherit;
+      text-align: left;
+      padding: 0;
+      cursor: pointer;
+    }
+    .place-copy {
+      min-width: 0;
+      overflow: hidden;
+    }
+    .place-copy strong,
+    .place-copy small,
+    .place-copy > span {
+      display: block;
     }
     .place .pokemon-sprites {
       grid-column: 1 / -1;
+      grid-row: 2;
       width: 100%;
-      grid-template-columns: repeat(6, minmax(36px, 1fr));
+      max-width: 100%;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, 64px);
+      gap: 4px 8px;
+      margin-top: 6px;
+      min-height: 132px;
+      overflow: hidden;
     }
+    .place .pokemon-slot,
     .place .pokemon-sprites img {
-      width: 48px;
-      height: 48px;
-      justify-self: center;
+      width: 64px;
+      height: 64px;
+    }
+    .hall-pokemon-button {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: center;
+      white-space: nowrap;
+      margin-top: 0 !important;
+    }
+    .top-three {
+      align-items: stretch;
+    }
+    .top-three article {
+      min-width: 0;
+      min-height: 245px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      overflow: hidden;
+    }
+    .top-three article .pokemon-sprites {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, 64px);
+      width: 100%;
+      min-height: 132px;
+      margin-top: auto;
+      gap: 4px 8px;
+    }
+    .top-three article .pokemon-slot,
+    .top-three article .pokemon-sprites img {
+      width: 64px;
+      height: 64px;
+    }
+    .modal {
+      overflow: auto;
+    }
+    .modal > form {
+      box-sizing: border-box;
+      width: min(620px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+    .modal input,
+    .modal select,
+    .modal textarea {
+      box-sizing: border-box;
+      max-width: 100%;
     }
     .profile-overlay {
       position: fixed;
       inset: 0;
       z-index: 9999;
+      background: rgba(0,0,0,.42);
     }
     .champion-display {
       display: flex;
       align-items: center;
       gap: 10px;
     }
-
+    .champion-display .avatar {
+      width: 42px;
+      height: 42px;
+    }
+    .place .avatar,
+    .top-three article .avatar {
+      width: 56px;
+      height: 56px;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+    .place .avatar-fallback,
+    .top-three article .avatar-fallback {
+      border: 1px solid rgba(215, 177, 83, .45) !important;
+    }
    `}</style>
 
    <header>
@@ -291,7 +376,11 @@ useEffect(() => {
      className="brand"
      onClick={()=>setView("hall")}
     >
-     <span className="brand-mark">{data.logo ? <img className="site-logo" src={data.logo} alt="PTC logo" /> : "◉"}</span>
+     {data.logo ? (
+      <img className="site-logo" src={data.logo} alt="Pallet Town Cafe logo" />
+     ) : (
+      <span>◉</span>
+     )}
 
      <div>
       Pallet Town Cafe
@@ -535,6 +624,8 @@ useEffect(() => {
   api={api}
   reload={load}
   pokemonOptions={pokemonOptions}
+  selectedPlayer={selectedPlayer}
+  selectedCategory={selectedCategory}
  />
 }
 
@@ -549,19 +640,50 @@ useEffect(() => {
   </main>
  );
 }
-function Hall({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">PERMANENT STANDINGS</p><h2>Lifetime Leaderboard</h2></div>{admin&&<div><button
-  className="button ghost"
-  onClick={()=>open("points")}
->
-  Award Points
-</button>
-
-<button
-  className="button"
-  onClick={()=>open("match")}
->
-  Record Battle
-</button></div>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by player name or IGN…"/></label><div className="podium">{players.slice(0,3).map(p=><button key={p.id} className={`place p${p.rank}`} onClick={()=>choose(p)}><Avatar player={p}/><span className="place-copy"><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign || "No IGN"}</small><span>{p.points} pts</span></span><PokemonSprites pokemon={p.hallPokemon || []}/></button>)}</div><div className="table"><div className="row labels"><span>RANK</span><span>PLAYER</span><span>STATUS</span><span>POINTS</span></div>{players.map(p=><button className="row" key={p.id} onClick={()=>choose(p)}><span className={`rank r${p.rank}`}>#{p.rank}</span><span className="player-cell"><Avatar player={p}/><span><strong>{p.name}</strong><small>{p.ign}</small></span></span><span>{p.rank===1?<em className="champion">Champion</em>:p.rank<=3?<em>Top 3</em>:p.rank<=10?<em>Top 10</em>:<em className="regular">Competitive</em>}</span><span className="points">{p.points.toLocaleString()}</span></button>)}</div></>}
+function Hall({players,query,setQuery,choose,admin,open}:any){
+  return (
+    <>
+      <div className="section-head">
+        <div>
+          <p className="eyebrow">PERMANENT STANDINGS</p>
+          <h2>Lifetime Leaderboard</h2>
+        </div>
+        {admin&&<div>
+          <button className="button ghost" onClick={()=>open("pokemon")}>Set Pokémon</button>
+          <button className="button ghost" onClick={()=>open("points")}>Award Points</button>
+          <button className="button" onClick={()=>open("match")}>Record Battle</button>
+        </div>}
+      </div>
+      <label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search by player name or IGN…"/></label>
+      <div className="podium">
+        {players.slice(0,3).map((p:any)=>(
+          <article key={p.id} className={`place p${p.rank}`}>
+            <button className="place-main" onClick={()=>choose(p)}>
+              <Avatar player={p}/>
+              <span className="place-copy">
+                <i>#{p.rank}</i>
+                <strong>{p.name}</strong>
+                <small>{p.ign || "No IGN"}</small>
+                <span>{p.points} pts</span>
+              </span>
+            </button>
+            {p.hallPokemon?.length ? <PokemonSprites pokemon={p.hallPokemon} /> : null}
+            {admin&&<button type="button" className="button ghost hall-pokemon-button" onClick={(event)=>{event.stopPropagation();choose(p);open("pokemon")}}>Set Pokémon</button>}
+          </article>
+        ))}
+      </div>
+      <div className="table">
+        <div className="row labels"><span>RANK</span><span>PLAYER</span><span>STATUS</span><span>POINTS</span></div>
+        {players.map((p:any)=><button className="row" key={p.id} onClick={()=>choose(p)}>
+          <span className={`rank r${p.rank}`}>#{p.rank}</span>
+          <span className="player-cell"><Avatar player={p}/><span><strong>{p.name}</strong><small>{p.ign || "No IGN"}</small></span></span>
+          <span>{p.rank===1?<em className="champion">Champion</em>:p.rank<=3?<em>Top 3</em>:p.rank<=10?<em>Top 10</em>:<em className="regular">Competitive</em>}</span>
+          <span className="points">{p.points.toLocaleString()}</span>
+        </button>)}
+      </div>
+    </>
+  );
+}
 function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>BATTLE</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
 function Category({
@@ -756,8 +878,10 @@ function History({
             {admin && (
               <div className="history-actions">
                 <button
+                  type="button"
                   className="link"
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation();
                     selectTransaction(x);
                     open("edit-points");
                   }}
@@ -765,8 +889,10 @@ function History({
                   Edit
                 </button>
                 <button
+                  type="button"
                   className="link danger-link"
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation();
                     selectTransaction(x);
                     open("delete-points");
                   }}
@@ -802,8 +928,10 @@ function History({
             {admin && (
               <div className="history-actions">
                 <button
+                  type="button"
                   className="link"
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation();
                     choose(m);
                     open("edit-match");
                   }}
@@ -811,8 +939,10 @@ function History({
                   Edit
                 </button>
                 <button
+                  type="button"
                   className="link danger-link"
-                  onClick={() => {
+                  onClick={(event) => {
+                    event.stopPropagation();
                     choose(m);
                     open("delete-match");
                   }}
@@ -838,7 +968,9 @@ function Modal({
  api,
  reload,
  pokemonOptions,
-}:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(selected?.id||""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(selected?.id||""); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+ selectedPlayer,
+ selectedCategory,
+}:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(""); const [pokemonPlayerTarget,setPokemonPlayerTarget]=useState(""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(""); useEffect(()=>{if(type==="pokemon"){setPokemonTarget(selectedCategory?.id||"hall");setPokemonPlayerTarget(selectedPlayer?.id||"");}if(type==="match"){setMatchCategoryTarget(selectedCategory?.id||"");}if(type==="points"||type==="category-points"){setReason("");}},[type,selectedCategory?.id,selectedPlayer?.id]); const selectedRoster=useMemo(()=>{if(!pokemonPlayerTarget)return []; if(pokemonTarget==="hall"){const player=data.players.find((p:any)=>p.id===pokemonPlayerTarget);return Array.isArray(player?.hallPokemon)?player.hallPokemon:[];} const category=data.categories.find((c:any)=>c.id===pokemonTarget); const record=category?.records?.find((r:any)=>r.playerId===pokemonPlayerTarget); return Array.isArray(record?.pokemon)?record.pokemon:[];},[data.players,data.categories,pokemonTarget,pokemonPlayerTarget]); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
   if (type === "control") {
     return (
       <div className="modal">
@@ -1169,51 +1301,31 @@ if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.
             const boardId = String(form.get("boardId") || "");
             const playerId = String(form.get("playerId") || "");
             const pokemon = [1, 2, 3, 4, 5, 6].map((n) => form.get(`p${n}`));
-
             void api("pokemon.set", { boardId, playerId, pokemon });
           }}
         >
           <h2>Set Pokémon Roster</h2>
-
           <label>
             Board
-            <select
-              name="boardId"
-              required
-              value={pokemonTarget}
-              onChange={(event) => setPokemonTarget(event.target.value)}
-            >
+            <select name="boardId" required value={pokemonTarget} onChange={event=>setPokemonTarget(event.target.value)}>
               <option value="">Select board</option>
               <option value="hall">Hall of Fame</option>
-              {data.categories.map((category: any) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
+              {data.categories.map((category:any)=><option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
           </label>
-
-          <select name="playerId" required>
-            <option value="">Select player</option>
-            {data.players.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {p.name} / {p.ign || "No IGN"}
-              </option>
-            ))}
-          </select>
-
-          {[1, 2, 3, 4, 5, 6].map((n) => (
-            <PokemonPicker key={n} name={`p${n}`} options={pokemonOptions} />
-          ))}
-
-          <p className="muted">
-            Choose Hall of Fame to save the roster to the player's permanent Hall profile.
-          </p>
-
+          <label>
+            Player
+            <select name="playerId" required value={pokemonPlayerTarget} onChange={event=>setPokemonPlayerTarget(event.target.value)}>
+              <option value="">Select player</option>
+              {data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign || "No IGN"}</option>)}
+            </select>
+          </label>
+          <div className="pokemon-editor-grid">
+            {[1,2,3,4,5,6].map(n=><PokemonPicker key={`${pokemonTarget}-${pokemonPlayerTarget}-${n}-${selectedRoster[n-1]||""}`} name={`p${n}`} options={pokemonOptions} initialValue={selectedRoster[n-1]||""}/>)}
+          </div>
+          <p className="muted">Choose Hall of Fame for the player's permanent Hall roster, or choose a battle board for that board's roster.</p>
           <button className="button">Save Roster</button>
-          <button type="button" className="link" onClick={close}>
-            Cancel
-          </button>
+          <button type="button" className="link" onClick={close}>Cancel</button>
         </form>
       </div>
     );
