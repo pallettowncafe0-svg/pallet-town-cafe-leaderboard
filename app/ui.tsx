@@ -10,6 +10,70 @@ function Avatar({player,className=""}:{player:any;className?:string}) {
  return <span className={`avatar avatar-fallback ${className}`} aria-label={`${player?.name||player?.ign||"Player"} initials`}>{initials(player)}</span>;
 }
 
+function parsePokemonValue(value:string) {
+  const raw=String(value||"");
+  const shiny=raw.endsWith("|shiny");
+  return {
+    name:shiny?raw.slice(0,-6):raw,
+    shiny,
+  };
+}
+
+function showdownNames(value:string) {
+  const raw=parsePokemonValue(value).name.trim().toLowerCase();
+  if(!raw)return [];
+
+  const base=raw
+    .replace(/[’']/g,"")
+    .replace(/\s+/g,"-")
+    .replace(/-+/g,"-");
+
+  const names=[base];
+  const add=(name:string)=>{if(name&&!names.includes(name))names.push(name)};
+
+  if(base.endsWith("-mega-x"))add(base.replace(/-mega-x$/,"-megax"));
+  if(base.endsWith("-mega-y"))add(base.replace(/-mega-y$/,"-megay"));
+  if(base.endsWith("-mega"))add(base.replace(/-mega$/,"-mega"));
+  if(base.endsWith("-male"))add(base.replace(/-male$/,"-m"));
+  if(base.endsWith("-female"))add(base.replace(/-female$/,"-f"));
+
+  const aliases:Record<string,string>={
+    "meowstic-male":"meowstic-m",
+    "meowstic-female":"meowstic-f",
+    "indeedee-male":"indeedee",
+    "indeedee-female":"indeedee-f",
+    "basculegion-male":"basculegion",
+    "basculegion-female":"basculegion-f",
+    "urshifu-single-strike":"urshifu",
+    "urshifu-rapid-strike":"urshifu-rapidstrike",
+    "keldeo-ordinary":"keldeo",
+    "keldeo-resolute":"keldeo-resolute",
+    "mimikyu-disguised":"mimikyu",
+    "mimikyu-busted":"mimikyu-busted",
+    "eiscue-ice":"eiscue",
+    "eiscue-noice":"eiscue-noice",
+    "darmanitan-standard":"darmanitan",
+    "darmanitan-galar-standard":"darmanitan-galar",
+    "darmanitan-galar-zen":"darmanitan-galar-zen",
+    "gimmighoul-chest":"gimmighoul",
+    "gimmighoul-roaming":"gimmighoul-roaming",
+    "ogerpon-teal-mask":"ogerpon",
+    "ogerpon-wellspring-mask":"ogerpon-wellspring",
+    "ogerpon-hearthflame-mask":"ogerpon-hearthflame",
+    "ogerpon-cornerstone-mask":"ogerpon-cornerstone",
+  };
+  if(aliases[base])add(aliases[base]);
+
+  return names;
+}
+
+function pokemonSpriteUrl(value:string, shiny:boolean, candidate=0) {
+  const names=showdownNames(value);
+  const name=names[candidate]||names[0]||"";
+  if(!name)return "";
+  return `https://play.pokemonshowdown.com/sprites/${shiny?"ani-shiny":"ani"}/${name}.gif`;
+}
+
 function PokemonPicker({
   name,
   options,
@@ -19,51 +83,101 @@ function PokemonPicker({
   options: string[];
   initialValue?: string;
 }) {
-  const [query, setQuery] = useState(initialValue);
+  const initial=parsePokemonValue(initialValue);
+  const [query,setQuery]=useState(initial.name);
+  const [shiny,setShiny]=useState(initial.shiny);
 
-  const filtered = useMemo(() => {
-    const value = query.trim().toLowerCase();
-    if (!value) return options.slice(0, 30);
-    return options
-      .filter((pokemon) => pokemon.toLowerCase().includes(value))
-      .slice(0, 30);
-  }, [options, query]);
+  useEffect(()=>{
+    const next=parsePokemonValue(initialValue);
+    setQuery(next.name);
+    setShiny(next.shiny);
+  },[initialValue]);
+
+  const filtered=useMemo(()=>{
+    const value=query.trim().toLowerCase();
+    if(!value)return options.slice(0,30);
+    return options.filter(pokemon=>pokemon.toLowerCase().includes(value)).slice(0,30);
+  },[options,query]);
+
+  const storedValue=query.trim()?`${query.trim()}${shiny?"|shiny":""}`:"";
 
   return (
     <label className="pokemon-picker">
-      <span>{name.replace("p", "Pokémon ")}</span>
+      <span>{name.replace("p","Pokémon ")}</span>
       <input
         list={`${name}-options`}
-        name={name}
         value={query}
-        onChange={(event) => setQuery(event.target.value)}
+        onChange={event=>setQuery(event.target.value)}
         placeholder="Search Pokémon..."
         autoComplete="off"
       />
+      <input type="hidden" name={name} value={storedValue}/>
       <datalist id={`${name}-options`}>
-        {filtered.map((pokemon) => (
-          <option key={pokemon} value={pokemon} />
-        ))}
+        {filtered.map(pokemon=><option key={pokemon} value={pokemon}/>)}
       </datalist>
+      <div className="pokemon-variant-toggle">
+        <button
+          type="button"
+          className={`variant-button${!shiny?" active":""}`}
+          onClick={()=>setShiny(false)}
+        >
+          Normal
+        </button>
+        <button
+          type="button"
+          className={`variant-button${shiny?" active":""}`}
+          onClick={()=>setShiny(true)}
+        >
+          Shiny
+        </button>
+      </div>
+      {query.trim() ? (
+        <div className="pokemon-picker-preview">
+          <img
+            src={pokemonSpriteUrl(query,shiny)}
+            alt={`${query}${shiny?" shiny":""}`}
+            onError={event=>{
+              const current=Number(event.currentTarget.dataset.candidate||"0");
+              const next=current+1;
+              const urls=showdownNames(query);
+              if(next<urls.length){
+                event.currentTarget.dataset.candidate=String(next);
+                event.currentTarget.src=pokemonSpriteUrl(query,shiny,next);
+              } else {
+                event.currentTarget.style.visibility="hidden";
+              }
+            }}
+          />
+        </div>
+      ) : null}
     </label>
   );
 }
 
 function PokemonSprites({ pokemon, compact=false }: { pokemon: string[]; compact?: boolean }) {
-  if (!pokemon?.length) return null;
+  if(!pokemon?.length)return null;
   return (
     <div className={`pokemon-sprites${compact ? " compact" : ""}`}>
-      {Array.from({ length: 6 }, (_, index) => {
-        const name = pokemon[index];
+      {Array.from({length:6},(_,index)=>{
+        const value=pokemon[index];
+        const parsed=parsePokemonValue(value||"");
         return (
-          <span className="pokemon-slot" key={`${name || "empty"}-${index}`}>
-            {name ? (
+          <span className="pokemon-slot" key={`${value||"empty"}-${index}`}>
+            {parsed.name ? (
               <img
-                src={`https://play.pokemonshowdown.com/sprites/xyani/${name.toLowerCase()}.gif`}
-                alt={name}
-                title={name}
-                onError={(event) => {
-                  event.currentTarget.style.visibility = "hidden";
+                src={pokemonSpriteUrl(value,parsed.shiny)}
+                alt={`${parsed.name}${parsed.shiny?" shiny":""}`}
+                title={`${parsed.name}${parsed.shiny?" (Shiny)":""}`}
+                onError={event=>{
+                  const current=Number(event.currentTarget.dataset.candidate||"0");
+                  const next=current+1;
+                  const urls=showdownNames(value);
+                  if(next<urls.length){
+                    event.currentTarget.dataset.candidate=String(next);
+                    event.currentTarget.src=pokemonSpriteUrl(value,parsed.shiny,next);
+                  } else {
+                    event.currentTarget.style.visibility="hidden";
+                  }
                 }}
               />
             ) : null}
@@ -230,6 +344,37 @@ useEffect(() => {
     .pokemon-sprites.compact img {
       width: 48px;
       height: 48px;
+    }
+    .pokemon-variant-toggle {
+      display: flex;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .variant-button {
+      border: 1px solid rgba(215,177,83,.35);
+      background: rgba(255,255,255,.04);
+      color: inherit;
+      border-radius: 7px;
+      padding: 5px 9px;
+      cursor: pointer;
+      font-size: .78rem;
+    }
+    .variant-button.active {
+      background: rgba(215,177,83,.18);
+      border-color: rgba(215,177,83,.75);
+    }
+    .pokemon-picker-preview {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 4px;
+      overflow: hidden;
+    }
+    .pokemon-picker-preview img {
+      width: 54px;
+      height: 54px;
+      object-fit: contain;
     }
     .pokemon-editor-grid {
       display: grid;
