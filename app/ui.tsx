@@ -69,12 +69,12 @@ export default function LeaderboardApp(){
  const [data,setData]=useState<Data>(empty);
  const [view,setView]=useState("hall");
  const [query,setQuery]=useState("");
- const [selectedPlayer,setSelectedPlayer]=useState<any>(null);
- const [selectedCategory,setSelectedCategory]=useState<any>(null);
- const [selectedMatch,setSelectedMatch]=useState<any>(null);
- const [selectedTransaction,setSelectedTransaction]=useState<any>(null);
- const [pokemonOptions,setPokemonOptions]=useState<string[]>([]);
- const [modal,setModal]=useState<string|null>(null);
+const [selectedPlayer,setSelectedPlayer]=useState<any>(null);
+const [selectedCategory,setSelectedCategory]=useState<any>(null);
+const [selectedMatch,setSelectedMatch]=useState<any>(null);
+const [selectedTransaction,setSelectedTransaction]=useState<any>(null);
+const [pokemonOptions,setPokemonOptions]=useState<string[]>([]);
+const [modal,setModal]=useState<string|null>(null);;
  const [notice,setNotice]=useState("");
 
  const load=async()=>{
@@ -88,7 +88,7 @@ export default function LeaderboardApp(){
   }
  };
 
- useEffect(() => {
+useEffect(() => {
   void load();
 
   fetch("https://pokeapi.co/api/v2/pokemon?limit=2000")
@@ -103,7 +103,7 @@ export default function LeaderboardApp(){
     .catch(() => {
       setPokemonOptions([]);
     });
- },[]);
+}, []);
 
  const api=async(action:string,payload:any={})=>{
   const r=await fetch("/api/admin/action",{
