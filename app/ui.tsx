@@ -3,6 +3,8 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean};
 const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+type PokemonOption={id:string;name:string};
+
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
 function Avatar({player,className=""}:{player:any;className?:string}) {
  const [broken,setBroken]=useState(false);
@@ -19,17 +21,36 @@ function parsePokemonValue(value:string) {
   };
 }
 
-function showdownId(value:string) {
-  return parsePokemonValue(value).name
-    .trim()
+function showdownNames(value:string, options:PokemonOption[] = []) {
+  const raw=parsePokemonValue(value).name.trim();
+  if(!raw)return [];
+
+  const match=options.find(
+    option=>option.name.toLowerCase()===raw.toLowerCase() ||
+      option.id.toLowerCase()===raw.toLowerCase()
+  );
+  if(match)return [match.id];
+
+  const base=raw
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
+    .replace(/[’']/g,"")
+    .replace(/\s+/g,"-")
+    .replace(/-+/g,"-");
+
+  const names=[base.replace(/-/g,"")];
+  const add=(name:string)=>{if(name&&!names.includes(name))names.push(name)};
+
+  if(base.endsWith("-mega-x"))add(base.replace(/-mega-x$/,"-megax").replace(/-/g,""));
+  if(base.endsWith("-mega-y"))add(base.replace(/-mega-y$/,"-megay").replace(/-/g,""));
+  if(base.endsWith("-male"))add(base.replace(/-male$/,"-m").replace(/-/g,""));
+  if(base.endsWith("-female"))add(base.replace(/-female$/,"-f").replace(/-/g,""));
+
+  return names;
 }
 
-function pokemonSpriteUrl(value:string, shiny:boolean) {
-  const name=showdownId(value);
+function pokemonSpriteUrl(value:string, shiny:boolean, candidate=0, options:PokemonOption[] = []) {
+  const names=showdownNames(value,options);
+  const name=names[candidate]||names[0]||"";
   if(!name)return "";
   return `https://play.pokemonshowdown.com/sprites/${shiny?"ani-shiny":"ani"}/${name}.gif`;
 }
@@ -40,7 +61,7 @@ function PokemonPicker({
   initialValue = "",
 }: {
   name: string;
-  options: string[];
+  options: PokemonOption[];
   initialValue?: string;
 }) {
   const initial=parsePokemonValue(initialValue);
@@ -49,14 +70,20 @@ function PokemonPicker({
 
   useEffect(()=>{
     const next=parsePokemonValue(initialValue);
-    setQuery(next.name);
+    const match=options.find(
+      option=>option.name.toLowerCase()===next.name.toLowerCase() ||
+        option.id.toLowerCase()===next.name.toLowerCase()
+    );
+    setQuery(match?.name || next.name);
     setShiny(next.shiny);
-  },[initialValue]);
+  },[initialValue,options]);
 
   const filtered=useMemo(()=>{
     const value=query.trim().toLowerCase();
     if(!value)return options.slice(0,30);
-    return options.filter(pokemon=>pokemon.toLowerCase().includes(value)).slice(0,30);
+    return options
+      .filter(pokemon=>pokemon.name.toLowerCase().includes(value))
+      .slice(0,30);
   },[options,query]);
 
   const storedValue=query.trim()?`${query.trim()}${shiny?"|shiny":""}`:"";
@@ -73,7 +100,7 @@ function PokemonPicker({
       />
       <input type="hidden" name={name} value={storedValue}/>
       <datalist id={`${name}-options`}>
-        {filtered.map(pokemon=><option key={pokemon} value={pokemon}/>)}
+        {filtered.map(pokemon=><option key={pokemon.id} value={pokemon.name}/>)}
       </datalist>
       <div className="pokemon-variant-toggle">
         <button
@@ -94,10 +121,18 @@ function PokemonPicker({
       {query.trim() ? (
         <div className="pokemon-picker-preview">
           <img
-            src={pokemonSpriteUrl(query,shiny)}
+            src={pokemonSpriteUrl(query,shiny,0,options)}
             alt={`${query}${shiny?" shiny":""}`}
             onError={event=>{
-              event.currentTarget.style.visibility="hidden";
+              const current=Number(event.currentTarget.dataset.candidate||"0");
+              const next=current+1;
+              const urls=showdownNames(query,options);
+              if(next<urls.length){
+                event.currentTarget.dataset.candidate=String(next);
+                event.currentTarget.src=pokemonSpriteUrl(query,shiny,next,options);
+              } else {
+                event.currentTarget.style.visibility="hidden";
+              }
             }}
           />
         </div>
@@ -106,7 +141,15 @@ function PokemonPicker({
   );
 }
 
-function PokemonSprites({ pokemon, compact=false }: { pokemon: string[]; compact?: boolean }) {
+function PokemonSprites({
+  pokemon,
+  compact=false,
+  options=[],
+}: {
+  pokemon: string[];
+  compact?: boolean;
+  options?: PokemonOption[];
+}) {
   if(!pokemon?.length)return null;
   return (
     <div className={`pokemon-sprites${compact ? " compact" : ""}`}>
@@ -117,12 +160,20 @@ function PokemonSprites({ pokemon, compact=false }: { pokemon: string[]; compact
           <span className="pokemon-slot" key={`${value||"empty"}-${index}`}>
             {parsed.name ? (
               <img
-                src={pokemonSpriteUrl(value,parsed.shiny)}
+                src={pokemonSpriteUrl(value,parsed.shiny,0,options)}
                 alt={`${parsed.name}${parsed.shiny?" shiny":""}`}
                 title={`${parsed.name}${parsed.shiny?" (Shiny)":""}`}
                 onError={event=>{
-              event.currentTarget.style.visibility="hidden";
-            }}
+                  const current=Number(event.currentTarget.dataset.candidate||"0");
+                  const next=current+1;
+                  const urls=showdownNames(value,options);
+                  if(next<urls.length){
+                    event.currentTarget.dataset.candidate=String(next);
+                    event.currentTarget.src=pokemonSpriteUrl(value,parsed.shiny,next,options);
+                  } else {
+                    event.currentTarget.style.visibility="hidden";
+                  }
+                }}
               />
             ) : null}
           </span>
@@ -140,7 +191,7 @@ const [selectedPlayer,setSelectedPlayer]=useState<any>(null);
 const [selectedCategory,setSelectedCategory]=useState<any>(null);
 const [selectedMatch,setSelectedMatch]=useState<any>(null);
 const [selectedTransaction,setSelectedTransaction]=useState<any>(null);
-const [pokemonOptions,setPokemonOptions]=useState<string[]>([]);
+const [pokemonOptions,setPokemonOptions]=useState<PokemonOption[]>([]);
 const [modal,setModal]=useState<string|null>(null);;
  const [notice,setNotice]=useState("");
 
@@ -158,10 +209,10 @@ const [modal,setModal]=useState<string|null>(null);;
 useEffect(() => {
   void load();
 
-  fetch("/api/pokemon", {cache:"force-cache"})
-    .then(response => response.json())
+  fetch("/api/pokemon",{cache:"no-store"})
+    .then(response => response.ok ? response.json() : Promise.reject(new Error("Pokemon list unavailable")))
     .then(result => {
-      setPokemonOptions(Array.isArray(result?.pokemon) ? result.pokemon : []);
+      setPokemonOptions(Array.isArray(result?.options) ? result.options : []);
     })
     .catch(() => {
       setPokemonOptions([]);
@@ -207,7 +258,7 @@ useEffect(() => {
  );
 
  const stats={
-  points:data.players[0]?.points||0,
+  points:data.players.reduce((total,p)=>total+Number(p.points||0),0),
   battles:data.matches.length
  };
 
@@ -521,7 +572,7 @@ useEffect(() => {
 
     <div className="hero-stats">
 
-     <b>
+     <b className="hero-stat champion-stat">
       <span className="champion-display">
        <Avatar player={data.players[0]} />
        <strong>{data.players[0]?.name || "—"}</strong>
@@ -529,12 +580,12 @@ useEffect(() => {
       <small>Current Champion</small>
      </b>
 
-     <b>
+     <b className="hero-stat">
       {stats.points.toLocaleString()}
       <small>Total Points</small>
      </b>
 
-     <b>
+     <b className="hero-stat">
       {stats.battles}
       <small>Recorded Battles</small>
      </b>
@@ -593,6 +644,7 @@ useEffect(() => {
        choose={choosePlayer}
        admin={data.isAdmin}
        open={setModal}
+       pokemonOptions={pokemonOptions}
       />
      }
 
@@ -605,6 +657,7 @@ useEffect(() => {
        choose={choosePlayer}
        admin={data.isAdmin}
        open={setModal}
+       pokemonOptions={pokemonOptions}
       />
      }
 
@@ -633,6 +686,7 @@ useEffect(() => {
        choose={choosePlayer}
        admin={data.isAdmin}
        open={setModal}
+       pokemonOptions={pokemonOptions}
       />
      }
 
@@ -696,6 +750,7 @@ useEffect(() => {
      close={()=>setSelectedPlayer(null)}
      admin={data.isAdmin}
      open={setModal}
+     pokemonOptions={pokemonOptions}
     />
    }
 
@@ -725,7 +780,7 @@ useEffect(() => {
   </main>
  );
 }
-function Hall({players,query,setQuery,choose,admin,open}:any){
+function Hall({players,query,setQuery,choose,admin,open,pokemonOptions}:any){
   return (
     <>
       <div className="section-head">
@@ -752,7 +807,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
                 <span>{p.points} pts</span>
               </span>
             </button>
-            {p.hallPokemon?.length ? <PokemonSprites pokemon={p.hallPokemon} /> : null}
+            {p.hallPokemon?.length ? <PokemonSprites pokemon={p.hallPokemon} options={pokemonOptions} /> : null}
             {admin&&<button type="button" className="button ghost hall-pokemon-button" onClick={(event)=>{event.stopPropagation();choose(p);open("pokemon")}}>Set Pokémon</button>}
           </article>
         ))}
@@ -769,7 +824,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
     </>
   );
 }
-function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
+function Players({players,query,setQuery,choose,admin,open,pokemonOptions}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><span className="player-card-info"><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign || "No IGN"}</small><b>{p.points} pts</b></span>{p.hallPokemon?.length ? <span className="player-card-pokemon"><PokemonSprites pokemon={p.hallPokemon} compact options={pokemonOptions}/></span> : null}</button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>BATTLE</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
 function Category({
   category,
@@ -777,6 +832,7 @@ function Category({
   choose,
   admin,
   open,
+  pokemonOptions,
 }: any) {
   return (
     <>
@@ -832,7 +888,7 @@ function Category({
               {r.wins}W – {r.losses}L{" "}
               <small>{r.winRate}% WR</small>
             </strong>
-            <PokemonSprites pokemon={r.pokemon} />
+            <PokemonSprites pokemon={r.pokemon} options={pokemonOptions} />
           </article>
         ))}
       </div>
@@ -1043,7 +1099,7 @@ function History({
   );
 }
 
-function Profile({player,categories,close,admin,open}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="profile-overlay" onClick={close}><div className="drawer" onClick={e=>e.stopPropagation()}><button className="x" onClick={close}>×</button><div className="profile-heading"><Avatar player={player} className="avatar-large"/><div><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign || "No IGN"}</p></div></div><div className="profile-score"><b>#{player.rank||"—"}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div></div>}
+function Profile({player,categories,close,admin,open,pokemonOptions}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="profile-overlay" onClick={close}><div className="drawer" onClick={e=>e.stopPropagation()}><button className="x" onClick={close}>×</button><div className="profile-heading"><Avatar player={player} className="avatar-large"/><div><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign || "No IGN"}</p></div></div><div className="profile-score"><b>#{player.rank||"—"}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div></div>}
 function Backup({admin,onImport}:any){const [file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false);return <><div className="section-head"><div><p className="eyebrow">DATA PORTABILITY</p><h2>Backup & Restore</h2></div></div><div className="backup"><article><h3>Export Excel Backup</h3><p>Download the complete current leaderboard, history, battle records, and Pokémon lineups in one `.xlsx` workbook.</p><a className={`button ${!admin?"disabled":""}`} href={admin?"/api/export":undefined}>Export .xlsx</a></article><article><h3>Import Backup</h3><p>Restore players, battle categories, records, and Pokémon lineups. Existing players are matched by IGN.</p><input type="file" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="button" disabled={!admin||!file||busy} onClick={async()=>{if(!confirm("Import this backup? Existing player points and category records may be updated."))return;setBusy(true);try{await onImport(file)}catch(e){alert(e instanceof Error?e.message:"Import failed")}finally{setBusy(false)}}}> {busy?"Importing…":"Confirm Import"}</button></article></div>{!admin&&<p className="empty">Sign in as an admin to access backups.</p>}</>}
 function Modal({
  type,

@@ -7,24 +7,41 @@ const POKEDEX_URL = "https://play.pokemonshowdown.com/data/pokedex.json";
 export async function GET() {
   try {
     const response = await fetch(POKEDEX_URL, {
-      next: { revalidate: 3600 },
+      cache: "no-store",
     });
 
     if (!response.ok) {
-      throw new Error(`Pokémon API returned ${response.status}`);
+      throw new Error("Could not load the Pokémon list.");
     }
 
-    const pokedex = await response.json();
-    const pokemon = Object.values(pokedex as Record<string, any>)
-      .filter((entry:any) => entry?.name && Number(entry?.num) > 0)
-      .map((entry:any) => String(entry.name))
-      .filter((name:string, index:number, list:string[]) => list.indexOf(name) === index)
-      .sort((a:string, b:string) => a.localeCompare(b));
+    const pokedex = (await response.json()) as Record<
+      string,
+      { name?: string }
+    >;
 
-    return NextResponse.json({ pokemon });
-  } catch {
+    const options = Object.entries(pokedex)
+      .filter(([, entry]) => Boolean(entry?.name))
+      .map(([id, entry]) => ({
+        id,
+        name: entry.name as string,
+      }));
+
     return NextResponse.json(
-      { pokemon: [], error: "Could not load Pokémon data." },
+      { options },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not load the Pokémon list.",
+      },
       { status: 502 }
     );
   }

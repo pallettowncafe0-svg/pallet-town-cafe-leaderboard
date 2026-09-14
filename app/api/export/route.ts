@@ -56,6 +56,7 @@ export async function GET() {
       "Reason": transaction.reason || "",
       "Action": transaction.action,
       "Admin": transaction.actor,
+      "Category": transaction.category?.name || "",
     }));
 
     const categoryLeaderboard: Record<string, unknown>[] = [];
