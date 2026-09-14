@@ -19,57 +19,17 @@ function parsePokemonValue(value:string) {
   };
 }
 
-function showdownNames(value:string) {
-  const raw=parsePokemonValue(value).name.trim().toLowerCase();
-  if(!raw)return [];
-
-  const base=raw
-    .replace(/[’']/g,"")
-    .replace(/\s+/g,"-")
-    .replace(/-+/g,"-");
-
-  const names=[base];
-  const add=(name:string)=>{if(name&&!names.includes(name))names.push(name)};
-
-  if(base.endsWith("-mega-x"))add(base.replace(/-mega-x$/,"-megax"));
-  if(base.endsWith("-mega-y"))add(base.replace(/-mega-y$/,"-megay"));
-  if(base.endsWith("-mega"))add(base.replace(/-mega$/,"-mega"));
-  if(base.endsWith("-male"))add(base.replace(/-male$/,"-m"));
-  if(base.endsWith("-female"))add(base.replace(/-female$/,"-f"));
-
-  const aliases:Record<string,string>={
-    "meowstic-male":"meowstic-m",
-    "meowstic-female":"meowstic-f",
-    "indeedee-male":"indeedee",
-    "indeedee-female":"indeedee-f",
-    "basculegion-male":"basculegion",
-    "basculegion-female":"basculegion-f",
-    "urshifu-single-strike":"urshifu",
-    "urshifu-rapid-strike":"urshifu-rapidstrike",
-    "keldeo-ordinary":"keldeo",
-    "keldeo-resolute":"keldeo-resolute",
-    "mimikyu-disguised":"mimikyu",
-    "mimikyu-busted":"mimikyu-busted",
-    "eiscue-ice":"eiscue",
-    "eiscue-noice":"eiscue-noice",
-    "darmanitan-standard":"darmanitan",
-    "darmanitan-galar-standard":"darmanitan-galar",
-    "darmanitan-galar-zen":"darmanitan-galar-zen",
-    "gimmighoul-chest":"gimmighoul",
-    "gimmighoul-roaming":"gimmighoul-roaming",
-    "ogerpon-teal-mask":"ogerpon",
-    "ogerpon-wellspring-mask":"ogerpon-wellspring",
-    "ogerpon-hearthflame-mask":"ogerpon-hearthflame",
-    "ogerpon-cornerstone-mask":"ogerpon-cornerstone",
-  };
-  if(aliases[base])add(aliases[base]);
-
-  return names;
+function showdownId(value:string) {
+  return parsePokemonValue(value).name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
 }
 
-function pokemonSpriteUrl(value:string, shiny:boolean, candidate=0) {
-  const names=showdownNames(value);
-  const name=names[candidate]||names[0]||"";
+function pokemonSpriteUrl(value:string, shiny:boolean) {
+  const name=showdownId(value);
   if(!name)return "";
   return `https://play.pokemonshowdown.com/sprites/${shiny?"ani-shiny":"ani"}/${name}.gif`;
 }
@@ -137,15 +97,7 @@ function PokemonPicker({
             src={pokemonSpriteUrl(query,shiny)}
             alt={`${query}${shiny?" shiny":""}`}
             onError={event=>{
-              const current=Number(event.currentTarget.dataset.candidate||"0");
-              const next=current+1;
-              const urls=showdownNames(query);
-              if(next<urls.length){
-                event.currentTarget.dataset.candidate=String(next);
-                event.currentTarget.src=pokemonSpriteUrl(query,shiny,next);
-              } else {
-                event.currentTarget.style.visibility="hidden";
-              }
+              event.currentTarget.style.visibility="hidden";
             }}
           />
         </div>
@@ -169,16 +121,8 @@ function PokemonSprites({ pokemon, compact=false }: { pokemon: string[]; compact
                 alt={`${parsed.name}${parsed.shiny?" shiny":""}`}
                 title={`${parsed.name}${parsed.shiny?" (Shiny)":""}`}
                 onError={event=>{
-                  const current=Number(event.currentTarget.dataset.candidate||"0");
-                  const next=current+1;
-                  const urls=showdownNames(value);
-                  if(next<urls.length){
-                    event.currentTarget.dataset.candidate=String(next);
-                    event.currentTarget.src=pokemonSpriteUrl(value,parsed.shiny,next);
-                  } else {
-                    event.currentTarget.style.visibility="hidden";
-                  }
-                }}
+              event.currentTarget.style.visibility="hidden";
+            }}
               />
             ) : null}
           </span>
@@ -214,14 +158,10 @@ const [modal,setModal]=useState<string|null>(null);;
 useEffect(() => {
   void load();
 
-  fetch("https://pokeapi.co/api/v2/pokemon?limit=2000")
+  fetch("/api/pokemon", {cache:"force-cache"})
     .then(response => response.json())
     .then(result => {
-      const names = Array.isArray(result?.results)
-        ? result.results.map((item: any) => item.name)
-        : [];
-
-      setPokemonOptions(names);
+      setPokemonOptions(Array.isArray(result?.pokemon) ? result.pokemon : []);
     })
     .catch(() => {
       setPokemonOptions([]);
@@ -581,7 +521,7 @@ useEffect(() => {
 
     <div className="hero-stats">
 
-     <b className="hero-stat champion-stat">
+     <b>
       <span className="champion-display">
        <Avatar player={data.players[0]} />
        <strong>{data.players[0]?.name || "—"}</strong>
@@ -589,12 +529,12 @@ useEffect(() => {
       <small>Current Champion</small>
      </b>
 
-     <b className="hero-stat">
+     <b>
       {stats.points.toLocaleString()}
       <small>Total Points</small>
      </b>
 
-     <b className="hero-stat">
+     <b>
       {stats.battles}
       <small>Recorded Battles</small>
      </b>
@@ -829,7 +769,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
     </>
   );
 }
-function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><span className="player-card-info"><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign || "No IGN"}</small><b>{p.points} pts</b></span>{p.hallPokemon?.length ? <span className="player-card-pokemon"><PokemonSprites pokemon={p.hallPokemon} compact /></span> : null}</button>)}</div></>}
+function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>BATTLE</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
 function Category({
   category,
@@ -899,7 +839,7 @@ function Category({
 
       <h3>Battle Record</h3>
 
-      <div className="table battle-record-table">
+      <div className="table">
         <div className="row labels">
           <span>RANK</span>
           <span>PLAYER</span>
