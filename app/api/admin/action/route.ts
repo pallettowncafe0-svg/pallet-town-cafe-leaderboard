@@ -220,7 +220,14 @@ else if(action==="category.points") {
      await recalculateCategory(existing.categoryId,tx);
     });
    }
-  else if(action==="pokemon.set") { const list=(payload.pokemon||[]).filter((name:string)=>name.trim()).slice(0,6); await db.categoryRecord.upsert({where:{categoryId_playerId:{categoryId:payload.categoryId,playerId:payload.playerId}},create:{categoryId:payload.categoryId,playerId:payload.playerId,pokemon:JSON.stringify(list)},update:{pokemon:JSON.stringify(list)}}); }
+  else if(action==="pokemon.set") {
+    const list=(payload.pokemon||[]).filter((name:string)=>String(name||"").trim()).slice(0,6);
+    if(payload.boardId==="hall") {
+      await db.player.update({where:{id:payload.playerId},data:{hallPokemon:JSON.stringify(list)}});
+    } else {
+      await db.categoryRecord.upsert({where:{categoryId_playerId:{categoryId:payload.boardId,playerId:payload.playerId}},create:{categoryId:payload.boardId,playerId:payload.playerId,pokemon:JSON.stringify(list)},update:{pokemon:JSON.stringify(list)}});
+    }
+  }
   else if(action==="background.set") await db.setting.upsert({where:{key:"background"},create:{key:"background",value:payload.value},update:{value:payload.value}});
    else if(action==="logo.set") await db.setting.upsert({where:{key:"logo"},create:{key:"logo",value:payload.value},update:{value:payload.value}});
   else throw new Error("Unknown action");
