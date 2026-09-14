@@ -444,7 +444,10 @@ if(type==="category-points")
           </option>
 
           {data.players.map((p:any)=>
-            <option key={p.id} value={p.id}>
+            <option
+              key={p.id}
+              value={p.id}
+            >
               {p.name} / {p.ign}
             </option>
           )}
@@ -456,12 +459,12 @@ if(type==="category-points")
               type="button"
               key={n}
               onClick={e=>{
-                const input=
-                  e.currentTarget.form!
-                    .elements.namedItem("amount")
-                  as HTMLInputElement;
+                const form=e.currentTarget.form;
+                const input=form?.elements.namedItem("amount");
 
-                input.value=String(n);
+                if(input instanceof HTMLInputElement){
+                  input.value=String(n);
+                }
               }}
             >
               +{n}
