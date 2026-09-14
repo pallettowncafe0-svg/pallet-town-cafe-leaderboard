@@ -1610,7 +1610,6 @@ function Modal({
                   });
                   const result=await response.json();
                   if(!response.ok)throw new Error(result.error||"Could not update setting.");
-                  setData(current=>({...current,pokeCompareHideDetails:result.hideDetails===true}));
                   await reload();
                 }catch(error){alert(error instanceof Error?error.message:"Could not update setting.");}
               }}/>
