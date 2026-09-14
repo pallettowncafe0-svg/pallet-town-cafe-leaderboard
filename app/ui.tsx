@@ -1,8 +1,8 @@
 "use client";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 type HighScore={score:number;name:string;note:string;createdAt:string};
-type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[];pokeCompareArt:string|null};
-const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false,pokeCompareHighScores:[],pokeCompareArt:null};
+type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[];pokeCompareArt:string|null;pokeCompareHideDetails:boolean};
+const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false,pokeCompareHighScores:[],pokeCompareArt:null,pokeCompareHideDetails:false};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
 function Avatar({player,className=""}:{player:any;className?:string}) {
@@ -216,7 +216,7 @@ function gameDisplayName(name:string){
   return String(name||"").split("-").map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(" ");
 }
 
-function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[];onScoresChange:(scores:HighScore[])=>void;art:string|null}){
+function HigherLowerGame({highScores,onScoresChange,art,isAdmin,hideHighScoreDetails}:{highScores:HighScore[];onScoresChange:(scores:HighScore[])=>void;art:string|null;isAdmin:boolean;hideHighScoreDetails:boolean}){
   const [current,setCurrent]=useState<GamePokemon|null>(null);
   const [next,setNext]=useState<GamePokemon|null>(null);
   const [metric,setMetric]=useState<(typeof HIGHER_LOWER_METRICS)[number]>(HIGHER_LOWER_METRICS[0]);
@@ -234,6 +234,9 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
   const [playerNote,setPlayerNote]=useState("");
   const [submitting,setSubmitting]=useState(false);
   const [timeLeft,setTimeLeft]=useState(10);
+  const [editingHighScore,setEditingHighScore]=useState<number|null>(null);
+  const [editName,setEditName]=useState("");
+  const [editNote,setEditNote]=useState("");
 
   useEffect(()=>{
     const saved=Number(window.localStorage.getItem("ptc-pokecompare-best")||0);
@@ -309,10 +312,27 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
     }
   };
 
+
   const continueGame=async()=>{
     if(!current||!next)return;
     if(correct){await loadRound(next);return;}
-    setStarted(false);setCurrent(null);setNext(null);setRevealed(false);setCorrect(null);setGameOver(false);
+    goHome();
+  };
+
+  const goHome=()=>{
+    setScore(0);
+    setStarted(false);
+    setCurrent(null);
+    setNext(null);
+    setRevealed(false);
+    setCorrect(null);
+    setGameOver(false);
+    setQualifies(false);
+    setSubmitted(false);
+    setPlayerName("");
+    setPlayerNote("");
+    setError("");
+    setTimeLeft(10);
   };
 
   const loadState=async()=>{
@@ -337,6 +357,44 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
     }catch(err){
       setError(err instanceof Error?err.message:"Could not save high score.");
     }finally{setSubmitting(false);}
+  };
+
+  const beginEditHighScore=(index:number,entry:HighScore)=>{
+    setEditingHighScore(index);
+    setEditName(entry.name);
+    setEditNote(entry.note);
+    setError("");
+  };
+
+  const saveEditedHighScore=async()=>{
+    if(editingHighScore===null)return;
+    try{
+      const response=await fetch("/api/admin/pokecompare-highscores",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"edit",index:editingHighScore,name:editName,note:editNote}),
+      });
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||"Could not edit high score.");
+      onScoresChange(Array.isArray(result.scores)?result.scores:highScores);
+      setEditingHighScore(null);
+    }catch(err){setError(err instanceof Error?err.message:"Could not edit high score.");}
+  };
+
+  const removeHighScore=async()=>{
+    if(editingHighScore===null)return;
+    if(!window.confirm("Remove this high score?"))return;
+    try{
+      const response=await fetch("/api/admin/pokecompare-highscores",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({action:"remove",index:editingHighScore}),
+      });
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||"Could not remove high score.");
+      onScoresChange(Array.isArray(result.scores)?result.scores:highScores);
+      setEditingHighScore(null);
+    }catch(err){setError(err instanceof Error?err.message:"Could not remove high score.");}
   };
 
   return (
@@ -390,15 +448,15 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
 
               <article className={`game-pokemon next-pokemon${revealed?(correct?" correct":" wrong"):""}`}>
                 <span className="game-card-label">NEXT</span>
-                {revealed ? (
+                {revealed&&next ? (
                   <>
-                    {next?.sprite&&<img src={next.sprite} alt={gameDisplayName(next.name)}/>}
-                    <h3>{gameDisplayName(next?.name||"")}</h3>
-                    <div className="game-types">{next?.types.map(type=><span key={type}>{type}</span>)}</div>
-                    <b>{next?formatValue(next,metric.key):"?"}</b>
+                    {next.sprite&&<img src={next.sprite} alt={gameDisplayName(next.name)}/>} 
+                    <h3>{gameDisplayName(next.name)}</h3>
+                    <div className="game-types">{next.types.map(type=><span key={type}>{type}</span>)}</div>
+                    <b>{formatValue(next,metric.key)}</b>
                   </>
                 ) : (
-                  <div className="next-hidden-mark">?</div>
+                  <div className="game-hidden-pokemon">?</div>
                 )}
               </article>
             </div>
@@ -433,14 +491,17 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
                 <strong>{correct?"CORRECT!":"WRONG!"}</strong>
                 <span>{gameDisplayName(next?.name||"")} has {next&&formatValue(next,metric.key)} {metric.label.toLowerCase()}.</span>
                 {correct ? (
-                    <button className="button" onClick={()=>void continueGame()}>NEXT ROUND</button>
+                    <button className="button arcade-next" onClick={()=>void continueGame()}>NEXT ROUND</button>
                   ) : (
                     <button className="button" onClick={()=>void continueGame()}>PLAY AGAIN</button>
                   )}
               </div>
             )}
             {error&&<p className="game-error">{error}</p>}
-            <button type="button" className="pokecompare-load-state" onClick={()=>void loadState()} disabled={loading}>LOAD STATE</button>
+            <div className="pokecompare-bottom-actions">
+              <button type="button" className="pokecompare-load-state" onClick={()=>void loadState()} disabled={loading}>LOAD STATE</button>
+              <button type="button" className="pokecompare-home" onClick={goHome}>HOME</button>
+            </div>
           </>
         )}
       </div>
@@ -455,14 +516,23 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
               <div className={`highscore-row${entry?" filled":" empty"}`} key={entry?`${entry.createdAt}-${index}`:`empty-${index}`}>
                 <span className="highscore-rank">{String(index+1).padStart(2,"0")}</span>
                 <span className="highscore-player">
-                  <strong>{entry?.name||"—"}</strong>
-                  <small>{entry?.note||""}</small>
+                  {hideHighScoreDetails && !isAdmin ? <strong>—</strong> : <>
+                    <strong>{entry?.name||"—"}</strong>
+                    <small>{entry?.note||""}</small>
+                  </>}
                 </span>
                 <b>{entry?entry.score:"-"}</b>
+                {isAdmin&&entry&&<button type="button" className="highscore-edit" onClick={()=>beginEditHighScore(index,entry)}>EDIT</button>}
               </div>
             );
           })}
         </div>
+        {isAdmin&&editingHighScore!==null&&highScores[editingHighScore]&&<div className="highscore-edit-panel">
+          <p>EDIT SCORE #{String(editingHighScore+1).padStart(2,"0")} · POINTS LOCKED</p>
+          <input value={editName} maxLength={16} onChange={event=>setEditName(event.target.value.slice(0,16))} placeholder="Name / initials" />
+          <input value={editNote} maxLength={24} onChange={event=>setEditNote(event.target.value.slice(0,24))} placeholder="Message" />
+          <div><button type="button" className="button" onClick={()=>void saveEditedHighScore()}>SAVE</button><button type="button" className="danger" onClick={()=>void removeHighScore()}>REMOVE</button><button type="button" className="link" onClick={()=>setEditingHighScore(null)}>CANCEL</button></div>
+        </div>}
         <div className="highscore-footer">INSERT COINS · BEAT YOUR SCORE</div>
         <div className={`highscore-art${art?" has-image":""}`} aria-label={art?"PokéCompare arcade artwork":"PokéCompare artwork area"} style={art?{backgroundImage:`url(${art})`}:undefined} />
       </aside>
@@ -961,7 +1031,7 @@ useEffect(() => {
      }
 
 
-     {view==="games"&&<HigherLowerGame highScores={data.pokeCompareHighScores} art={data.pokeCompareArt} onScoresChange={scores=>setData(current=>({...current,pokeCompareHighScores:scores}))}/>}
+     {view==="games"&&<HigherLowerGame highScores={data.pokeCompareHighScores} art={data.pokeCompareArt} isAdmin={data.isAdmin} hideHighScoreDetails={data.pokeCompareHideDetails} onScoresChange={scores=>setData(current=>({...current,pokeCompareHighScores:scores}))}/>}
 
 
      {view==="battle"&&
@@ -1524,6 +1594,28 @@ function Modal({
             <input name="pokeCompareArtFile" type="file" accept="image/*" required />
             <button className="button">Use PokéCompare Artwork</button>
           </form>
+
+          <div className="pokecompare-admin-setting">
+            <div>
+              <strong>Hide High Score Names & Messages</strong>
+              <p className="muted">When enabled, the public high-score board shows scores only. Useful for scoring/verification.</p>
+            </div>
+            <label className="toggle">
+              <input type="checkbox" checked={data.pokeCompareHideDetails} onChange={async(event)=>{
+                try{
+                  const response=await fetch("/api/admin/pokecompare-settings",{
+                    method:"POST",
+                    headers:{"Content-Type":"application/json"},
+                    body:JSON.stringify({hideDetails:event.target.checked}),
+                  });
+                  const result=await response.json();
+                  if(!response.ok)throw new Error(result.error||"Could not update setting.");
+                  await reload();
+                }catch(error){alert(error instanceof Error?error.message:"Could not update setting.");}
+              }}/>
+              <span>ON</span>
+            </label>
+          </div>
 
           <div className="admin-control-actions">
             <button type="button" className="danger admin-logout" onClick={async()=>{

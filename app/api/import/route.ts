@@ -142,6 +142,11 @@ export async function POST(request: NextRequest) {
       update: { value: "[]" },
     });
     await db.setting.deleteMany({ where: { key: "pokecompare_art" } });
+    await db.setting.upsert({
+      where: { key: "pokecompare_hide_details" },
+      create: { key: "pokecompare_hide_details", value: "false" },
+      update: { value: "false" },
+    });
 
     const players = await db.player.findMany();
     const playerById = new Map(players.map((player) => [player.id, player]));
@@ -558,6 +563,17 @@ export async function POST(request: NextRequest) {
     const importedArt = pokeCompareSettingsRows.length
       ? getRowValue(pokeCompareSettingsRows[0], ["Artwork", "Art", "Image"])
       : "";
+
+    const importedHideDetails = pokeCompareSettingsRows.length
+      ? getRowValue(pokeCompareSettingsRows[0], ["Hide High Score Details", "Hide Names and Messages", "Hide High Scores"]).toLowerCase()
+      : "";
+
+    const hideHighScoreDetails = importedHideDetails === "yes" || importedHideDetails === "true" || importedHideDetails === "1";
+    await db.setting.upsert({
+      where: { key: "pokecompare_hide_details" },
+      create: { key: "pokecompare_hide_details", value: JSON.stringify(hideHighScoreDetails) },
+      update: { value: JSON.stringify(hideHighScoreDetails) },
+    });
 
     if (importedArt && importedArt.startsWith("data:image/")) {
       await db.setting.upsert({

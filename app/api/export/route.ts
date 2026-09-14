@@ -29,7 +29,7 @@ export async function GET() {
   try {
     await requireAdmin();
 
-    const [players, categories, transactions, matches, records, highScoreSetting, pokeCompareArtSetting] = await Promise.all([
+    const [players, categories, transactions, matches, records, highScoreSetting, pokeCompareArtSetting, pokeComparePrivacySetting] = await Promise.all([
       db.player.findMany({ where: { active: true }, orderBy: [{ points: "desc" }, { name: "asc" }] }),
       db.category.findMany({ include: { records: { where: { player: { active: true } }, include: { player: true } } }, orderBy: { name: "asc" } }),
       db.pointTransaction.findMany({ include: { player: true, category: true }, orderBy: { createdAt: "desc" } }),
@@ -37,6 +37,7 @@ export async function GET() {
       db.categoryRecord.findMany({ where: { player: { active: true } }, include: { category: true, player: true }, orderBy: { category: { name: "asc" } } }),
       db.setting.findUnique({ where: { key: "pokecompare_highscores" } }),
       db.setting.findUnique({ where: { key: "pokecompare_art" } }),
+      db.setting.findUnique({ where: { key: "pokecompare_hide_details" } }),
     ]);
 
     const lifetime = players.map((player, index) => ({
@@ -145,8 +146,14 @@ export async function GET() {
     addSheet("Match History", matchHistory);
     addSheet("Pokemon Records", pokemonRecords);
     addSheet("PokéCompare High Scores", highScoreRows);
+    let hideHighScoreDetails = false;
+    if (pokeComparePrivacySetting?.value) {
+      try { hideHighScoreDetails = JSON.parse(pokeComparePrivacySetting.value) === true; } catch { hideHighScoreDetails = pokeComparePrivacySetting.value === "true"; }
+    }
+
     addSheet("PokéCompare Settings", [{
       "Artwork": pokeCompareArtSetting?.value || "",
+      "Hide High Score Details": hideHighScoreDetails ? "Yes" : "No",
     }]);
 
     const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });

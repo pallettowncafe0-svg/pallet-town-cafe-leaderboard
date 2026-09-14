@@ -13,6 +13,7 @@ export async function GET() {
     logo,
     pokeCompareHighScores,
     pokeCompareArt,
+    pokeComparePrivacy,
     categoryTransactions,
   ] = await Promise.all([
     db.player.findMany({
@@ -78,6 +79,12 @@ export async function GET() {
     db.setting.findUnique({
       where: {
         key: "pokecompare_art",
+      },
+    }),
+
+    db.setting.findUnique({
+      where: {
+        key: "pokecompare_hide_details",
       },
     }),
 
@@ -181,6 +188,11 @@ export async function GET() {
     }
   }
 
+  let hideHighScoreDetails = false;
+  if (pokeComparePrivacy?.value) {
+    try { hideHighScoreDetails = JSON.parse(pokeComparePrivacy.value) === true; } catch { hideHighScoreDetails = pokeComparePrivacy.value === "true"; }
+  }
+
   return NextResponse.json({
     players,
     categories,
@@ -190,6 +202,7 @@ export async function GET() {
     logo: logo?.value || null,
     pokeCompareHighScores: parsedHighScores,
     pokeCompareArt: pokeCompareArt?.value || null,
+    pokeCompareHideDetails: hideHighScoreDetails,
     isAdmin: await isAdmin(),
   });
 }
