@@ -42,7 +42,6 @@ export async function GET() {
       "Full Name": player.name,
       "IGN": player.ign || "",
       "Lifetime Points": player.points,
-      "Profile Picture": player.image || "",
       "Best Performance": player.bestPerformance || "",
       "Date Added": player.createdAt,
       "Last Updated": player.updatedAt,

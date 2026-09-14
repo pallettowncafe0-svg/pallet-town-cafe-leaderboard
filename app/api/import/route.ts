@@ -228,7 +228,6 @@ export async function POST(request: NextRequest) {
           name: name || player.name,
           ign: ign || null,
           points: Math.trunc(number(row["Lifetime Points"])),
-          image: getRowValue(row, ["Profile Picture", "PFP", "Image", "Avatar"]) || null,
           bestPerformance: getRowValue(row, ["Best Performance"]) || null,
           active: true,
         },

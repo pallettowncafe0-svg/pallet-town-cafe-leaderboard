@@ -58,50 +58,115 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .champion-display{height:42px;display:flex;align-items:center;justify-content:flex-end;gap:10px}
 @media(max-width:850px){.hero-stat{min-width:0}.champion-stat{min-width:0}.champion-display{height:38px}}
 
-/* V13 player cards, battle table, profile-picture upload, and exact hero alignment. */
-.hero-stats{align-items:flex-start}
-.hero-stat{min-width:120px;min-height:58px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;line-height:1.05}
-.hero-stat-value{height:42px;display:flex;align-items:center;justify-content:flex-end;font-size:20px;color:var(--gold);font-weight:800;line-height:1}
-.champion-stat{min-width:190px}
-.champion-display{height:42px;display:flex;align-items:center;justify-content:flex-end;gap:10px}
-.champion-display .avatar{width:42px;height:42px}
-
-.player-card{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;align-items:center}
-.player-card-info{min-width:0;display:flex;align-items:center;gap:12px}
-.player-card-copy{min-width:0;display:block}
-.player-card-copy i{margin:0 0 6px}
-.player-card-copy strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.player-card-pokemon{width:150px;display:flex;align-items:center;justify-content:center}
-.player-card-pokemon .pokemon-sprites{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);width:148px;min-height:100px;gap:2px 3px;margin:0}
+/* V12.5 — Players card layout and Pokémon Higher / Lower mini game */
+.players-grid .player-card{
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) 132px;
+  gap:10px;
+  align-items:center;
+  min-height:145px;
+  padding:16px;
+}
+.players-grid .player-card > .avatar{
+  width:40px;
+  height:40px;
+  align-self:start;
+  margin-top:2px;
+}
+.player-card-info{
+  min-width:0;
+  display:block;
+  align-self:start;
+  padding-top:2px;
+}
+.player-card-info strong{
+  display:block;
+  font-size:18px;
+  line-height:1.08;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+.player-card-info small{
+  display:block;
+  margin-top:4px;
+  overflow-wrap:anywhere;
+}
+.player-card-info b{
+  display:block;
+  margin-top:14px;
+}
+.player-card-pokemon{
+  width:132px;
+  min-width:132px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.player-card-pokemon .pokemon-sprites{
+  grid-template-columns:repeat(3,40px);
+  grid-template-rows:repeat(2,40px);
+  width:126px;
+  min-height:84px;
+  gap:2px 3px;
+  margin:0;
+}
 .player-card-pokemon .pokemon-sprites.compact .pokemon-slot,
-.player-card-pokemon .pokemon-sprites.compact img{width:48px;height:48px}
+.player-card-pokemon .pokemon-sprites.compact img{
+  width:40px;
+  height:40px;
+}
 
-.battle-record-table .row{grid-template-columns:65px minmax(210px,1.8fr) minmax(100px,1fr) 135px 90px}
-.battle-record-table .row > span:nth-child(3){white-space:nowrap}
-.battle-record-table .row > span:nth-child(4),
-.battle-record-table .row > span:nth-child(5){text-align:right}
-.battle-record-table .row.labels > span:nth-child(4),
-.battle-record-table .row.labels > span:nth-child(5){text-align:right}
-
-.file-field{display:block;color:#a8a49b;font-size:12px;font-weight:700;margin-top:8px}
-.file-field input{margin-top:6px !important}
-.admin-panel-actions{display:flex;align-items:center;gap:12px;margin-top:18px}
-.admin-panel-actions .danger{margin:0}
+.higher-lower-page{max-width:980px;margin:0 auto}
+.game-score{display:flex;gap:22px;align-items:center}
+.game-score span{font-size:10px;letter-spacing:.12em;color:#77746e;font-weight:800}
+.game-score b{font-size:22px;color:var(--gold);margin-left:5px}
+.game-intro{background:#111110;border:1px solid #2a2926;border-radius:10px;padding:42px 30px;text-align:center;box-shadow:0 12px 35px #0005}
+.game-intro-icon{width:64px;height:64px;border:1px solid #b9a274;border-radius:50%;display:grid;place-items:center;margin:0 auto 18px;color:var(--gold);font-size:32px;font-weight:800}
+.game-intro h3{font-size:36px;margin:0 0 8px;text-transform:uppercase}
+.game-intro p{max-width:620px;margin:0 auto;color:var(--muted);line-height:1.6;font-size:13px}
+.game-rules{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:22px auto 26px;max-width:700px}
+.game-rules span{border:1px solid #39362e;background:#191815;border-radius:5px;padding:8px 11px;color:#c9c1b3;font-size:11px;font-weight:800}
+.game-start{margin:0}
+.game-question{margin:22px 0;text-align:center;display:flex;flex-direction:column;gap:3px;color:#918f89;font-size:11px;letter-spacing:.12em;font-weight:800}
+.game-question strong{font-family:"Barlow Condensed";font-size:32px;color:var(--gold);letter-spacing:.04em}
+.higher-lower-board{display:grid;grid-template-columns:minmax(0,1fr) 60px minmax(0,1fr);align-items:center;gap:14px}
+.game-pokemon{position:relative;min-height:390px;background:#111110;border:1px solid #2a2926;border-radius:10px;padding:22px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.game-pokemon img{width:min(220px,70%);height:220px;object-fit:contain;image-rendering:auto;margin:5px 0}
+.game-card-label{position:absolute;left:16px;top:14px;color:#77746e;font-size:9px;letter-spacing:.14em;font-weight:800}
+.game-pokemon h3{font-size:30px;margin:0 0 8px;text-transform:uppercase}
+.game-types{display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
+.game-types span{background:#292722;border-radius:12px;padding:4px 8px;color:#cfc5b5;font-size:9px;font-weight:800;text-transform:uppercase}
+.game-pokemon > b{font-size:26px;color:var(--gold);margin-top:13px;min-height:30px}
+.game-vs{width:48px;height:48px;border:1px solid #514936;border-radius:50%;display:grid;place-items:center;color:#a8a49b;font-family:"Barlow Condensed";font-size:18px;font-weight:800}
+.next-pokemon.correct{border-color:#5b8a63}
+.next-pokemon.wrong{border-color:#9d5555}
+.game-choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.game-choices button{border-radius:7px;padding:17px;font-family:"Barlow Condensed";font-size:23px;font-weight:800;letter-spacing:.04em}
+.higher-choice{background:#d8b76b;color:#15120c}
+.lower-choice{background:#292722;color:#eeeae1;border:1px solid #514936!important}
+.game-choices button:disabled{opacity:.55;cursor:default}
+.game-result{margin-top:18px;padding:18px;border:1px solid #39362e;background:#191815;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+.game-result strong{font-family:"Barlow Condensed";font-size:26px}
+.game-result span{color:#c2bcb1;font-size:12px}
+.game-result.is-correct strong{color:#9ac49e}
+.game-result.is-wrong strong{color:#d58b8b}
+.game-result .button{margin:0}
+.game-error{text-align:center;color:#d58b8b!important;margin-top:15px!important}
 
 @media(max-width:850px){
-  .hero-stat{min-width:0}
-  .champion-stat{min-width:0}
-  .hero-stat-value{font-size:16px}
-  .champion-display{height:38px}
-  .champion-display .avatar{width:38px;height:38px}
-  .player-card{grid-template-columns:minmax(0,1fr) 112px}
-  .player-card-pokemon{width:112px}
-  .player-card-pokemon .pokemon-sprites{grid-template-columns:repeat(3,34px);grid-template-rows:repeat(2,34px);width:106px;min-height:72px;gap:2px}
+  .players-grid .player-card{grid-template-columns:40px minmax(0,1fr) 102px;min-height:125px;padding:13px}
+  .player-card-pokemon{width:102px;min-width:102px}
+  .player-card-pokemon .pokemon-sprites{grid-template-columns:repeat(3,31px);grid-template-rows:repeat(2,31px);width:99px;min-height:65px}
   .player-card-pokemon .pokemon-sprites.compact .pokemon-slot,
-  .player-card-pokemon .pokemon-sprites.compact img{width:34px;height:34px}
-  .battle-record-table .row{grid-template-columns:45px minmax(0,1fr) 76px}
-  .battle-record-table .row span:nth-child(4),
-  .battle-record-table .row span:nth-child(5),
-  .battle-record-table .labels span:nth-child(4),
-  .battle-record-table .labels span:nth-child(5){display:none}
+  .player-card-pokemon .pokemon-sprites.compact img{width:31px;height:31px}
+  .game-score{gap:10px}
+  .game-score b{font-size:18px}
+  .game-intro{padding:30px 18px}
+  .game-intro h3{font-size:30px}
+  .higher-lower-board{grid-template-columns:1fr;gap:8px}
+  .game-vs{margin:auto;width:40px;height:40px}
+  .game-pokemon{min-height:290px;padding:18px}
+  .game-pokemon img{width:170px;height:170px}
+  .game-pokemon h3{font-size:25px}
+  .game-question strong{font-size:27px}
 }
