@@ -238,13 +238,25 @@ useEffect(() => {
       margin-top: 8px;
       align-self: center;
     }
+    /* Keep Hall of Fame podium cards visually identical to the battle-board cards:
+       player info on top, then a clean 3x2 Pokémon grid underneath. */
     .place {
       min-width: 0;
+      min-height: 245px;
       overflow: hidden;
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-rows: auto auto auto;
+      align-content: start;
+      gap: 8px 10px;
+      padding: 18px !important;
+      box-sizing: border-box;
     }
     .place-main {
       width: 100%;
       min-width: 0;
+      grid-column: 1;
+      grid-row: 1;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -257,19 +269,64 @@ useEffect(() => {
     }
     .place-copy {
       min-width: 0;
+      overflow: hidden;
+    }
+    .place-copy strong,
+    .place-copy small,
+    .place-copy > span {
+      display: block;
     }
     .place .pokemon-sprites {
+      grid-column: 1 / -1;
+      grid-row: 2;
       width: 100%;
       max-width: 100%;
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, 58px);
+      gap: 4px 6px;
+      margin-top: 6px;
+      min-height: 120px;
+      overflow: hidden;
     }
     .place .pokemon-slot {
-      width: 48px;
-      height: 48px;
+      width: 58px;
+      height: 58px;
     }
     .place .pokemon-sprites img {
-      width: 48px;
-      height: 48px;
+      width: 58px;
+      height: 58px;
+    }
+    .hall-pokemon-button {
+      grid-column: 2;
+      grid-row: 1;
+      align-self: center;
+      white-space: nowrap;
+      margin-top: 0 !important;
+    }
+    .top-three {
+      align-items: stretch;
+    }
+    .top-three article {
+      min-width: 0;
+      min-height: 245px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      overflow: hidden;
+    }
+    .top-three article .pokemon-sprites {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, 64px);
+      width: 100%;
+      min-height: 132px;
+      margin-top: auto;
+      gap: 4px 8px;
+    }
+    .top-three article .pokemon-slot,
+    .top-three article .pokemon-sprites img {
+      width: 64px;
+      height: 64px;
     }
     .modal {
       overflow: auto;
