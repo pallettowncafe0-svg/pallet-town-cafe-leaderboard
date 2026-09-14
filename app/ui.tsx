@@ -4,6 +4,43 @@ type Data={players:any[];categories:any[];history:any[];matches:any[];background
 const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
+
+async function readProfileImage(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Profile picture must be an image file.");
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error("Could not read the profile picture."));
+    reader.onload = () => {
+      const source = new Image();
+      source.onerror = () => reject(new Error("Could not process the profile picture."));
+      source.onload = () => {
+        const maxSize = 256;
+        const scale = Math.min(1, maxSize / Math.max(source.naturalWidth, source.naturalHeight));
+        const width = Math.max(1, Math.round(source.naturalWidth * scale));
+        const height = Math.max(1, Math.round(source.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) {
+          resolve(String(reader.result || ""));
+          return;
+        }
+        context.drawImage(source, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/webp", 0.82);
+        resolve(compressed || String(reader.result || ""));
+      };
+      source.src = String(reader.result || "");
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 function Avatar({player,className=""}:{player:any;className?:string}) {
  const [broken,setBroken]=useState(false);
  if(player?.image&&!broken) return <img className={`avatar ${className}`} src={player.image} alt={`${player.name||player.ign||"Player"} display picture`} style={{border:"0",outline:"none",boxShadow:"none",borderRadius:"50%",objectFit:"cover"}} onError={()=>setBroken(true)}/>;
@@ -583,7 +620,7 @@ useEffect(() => {
     <div className="hero-stats">
 
      <b className="hero-stat champion-stat">
-      <span className="champion-display">
+      <span className="hero-stat-value champion-display">
        <Avatar player={champion} />
        <strong>{champion?.name || "—"}</strong>
       </span>
@@ -591,12 +628,12 @@ useEffect(() => {
      </b>
 
      <b className="hero-stat">
-      {stats.points.toLocaleString()}
+      <span className="hero-stat-value">{stats.points.toLocaleString()}</span>
       <small>Total Points</small>
      </b>
 
      <b className="hero-stat">
-      {stats.battles}
+      <span className="hero-stat-value">{stats.battles}</span>
       <small>Recorded Battles</small>
      </b>
 
@@ -666,6 +703,7 @@ useEffect(() => {
        choose={choosePlayer}
        admin={data.isAdmin}
        open={setModal}
+       pokemonOptions={pokemonOptions}
       />
      }
 
@@ -830,7 +868,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
     </>
   );
 }
-function Players({players,query,setQuery,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><Avatar player={p}/><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign}</small><b>{p.points} pts</b></button>)}</div></>}
+function Players({players,query,setQuery,choose,admin,open,pokemonOptions}:any){return <><div className="section-head"><div><p className="eyebrow">ROSTER</p><h2>All Players</h2></div>{admin&&<button className="button" onClick={()=>open("player")}>New Player</button>}</div><label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label><div className="cards">{players.map(p=><button className="player-card" onClick={()=>choose(p)} key={p.id}><span className="player-card-info"><Avatar player={p}/><span className="player-card-copy"><i>#{p.rank}</i><strong>{p.name}</strong><small>{p.ign || "No IGN"}</small><b>{p.points} pts</b></span></span>{p.hallPokemon?.length ? <span className="player-card-pokemon"><PokemonSprites pokemon={p.hallPokemon} compact /></span> : null}</button>)}</div></>}
 function Battle({categories,choose,admin,open}:any){return <><div className="section-head"><div><p className="eyebrow">SEPARATE FROM LIFETIME POINTS</p><h2>Battle Leaderboards</h2></div>{admin&&<button className="button" onClick={()=>open("category")}>Create Category</button>}</div><div className="cards categories">{categories.map(c=><button className="category-card" onClick={()=>choose(c)} key={c.id}><i>BATTLE</i><strong>{c.name}</strong><small>{c.description||"A Pallet Town Cafe battle format"}</small><b>{c.records.length} competitors</b></button>)}</div>{!categories.length&&<p className="empty">No battle formats yet. An admin can create the first category.</p>}</>}
 function Category({
   category,
@@ -900,7 +938,7 @@ function Category({
 
       <h3>Battle Record</h3>
 
-      <div className="table">
+      <div className="table battle-record-table">
         <div className="row labels">
           <span>RANK</span>
           <span>PLAYER</span>
@@ -1116,7 +1154,7 @@ function Modal({
  pokemonOptions,
  selectedPlayer,
  selectedCategory,
-}:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(""); const [pokemonPlayerTarget,setPokemonPlayerTarget]=useState(""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(""); useEffect(()=>{if(type==="pokemon"){setPokemonTarget(selectedCategory?.id||"hall");setPokemonPlayerTarget(selectedPlayer?.id||"");}if(type==="match"){setMatchCategoryTarget(selectedCategory?.id||"");}if(type==="points"||type==="category-points"){setReason("");}},[type,selectedCategory?.id,selectedPlayer?.id]); const selectedRoster=useMemo(()=>{if(!pokemonPlayerTarget)return []; if(pokemonTarget==="hall"){const player=data.players.find((p:any)=>p.id===pokemonPlayerTarget);return Array.isArray(player?.hallPokemon)?player.hallPokemon:[];} const category=data.categories.find((c:any)=>c.id===pokemonTarget); const record=category?.records?.find((r:any)=>r.playerId===pokemonPlayerTarget); return Array.isArray(record?.pokemon)?record.pokemon:[];},[data.players,data.categories,pokemonTarget,pokemonPlayerTarget]); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+}:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(""); const [pokemonPlayerTarget,setPokemonPlayerTarget]=useState(""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(""); useEffect(()=>{if(type==="pokemon"){setPokemonTarget(selectedCategory?.id||"hall");setPokemonPlayerTarget(selectedPlayer?.id||"");}if(type==="match"){setMatchCategoryTarget(selectedCategory?.id||"");}if(type==="points"||type==="category-points"){setReason("");}},[type,selectedCategory?.id,selectedPlayer?.id]); const selectedRoster=useMemo(()=>{if(!pokemonPlayerTarget)return []; if(pokemonTarget==="hall"){const player=data.players.find((p:any)=>p.id===pokemonPlayerTarget);return Array.isArray(player?.hallPokemon)?player.hallPokemon:[];} const category=data.categories.find((c:any)=>c.id===pokemonTarget); const record=category?.records?.find((r:any)=>r.playerId===pokemonPlayerTarget); return Array.isArray(record?.pokemon)?record.pokemon:[];},[data.players,data.categories,pokemonTarget,pokemonPlayerTarget]); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const form=e.currentTarget;const f=new FormData(form);const p=Object.fromEntries(f);if(action==="player.create"||action==="player.update"){const file=(form.elements.namedItem("imageFile") as HTMLInputElement)?.files?.[0];const existingImage=String(p.existingImage||"");if(file){p.image=await readProfileImage(file);}else if(!String(p.image||"")&&existingImage){p.image=existingImage;}delete p.imageFile;delete p.existingImage;}try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else alert("Incorrect password")}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
   if (type === "control") {
     return (
       <div className="modal">
@@ -1181,15 +1219,20 @@ function Modal({
             <button className="button">Use PTC Logo</button>
           </form>
 
-          <button type="button" className="link" onClick={close}>
-            Close
-          </button>
+          <div className="admin-panel-actions">
+            <button type="button" className="danger" onClick={async()=>{const r=await fetch("/api/admin/logout",{method:"POST"});if(!r.ok){alert("Could not log out");return;}await reload();close();}}>
+              Log Out
+            </button>
+            <button type="button" className="link" onClick={close}>
+              Close
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  if(type==="player"||type==="edit-player") {const p=type==="edit-player"?selected:null;return <div className="modal"><form onSubmit={e=>submit(e,p?"player.update":"player.create")}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" defaultValue={p?.ign||""} placeholder="In-game name (optional)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/><input name="image" type="url" defaultValue={p?.image||""} placeholder="Display picture URL (optional)"/><input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
+  if(type==="player"||type==="edit-player") {const p=type==="edit-player"?selected:null;return <div className="modal"><form onSubmit={e=>submit(e,p?"player.update":"player.create")}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" defaultValue={p?.ign||""} placeholder="In-game name (optional)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/>{p&&<input type="hidden" name="existingImage" value={p?.image||""}/>}<input name="image" type="url" defaultValue={p?.image?.startsWith("data:") ? "" : (p?.image||"")} placeholder="Display picture URL (optional)"/><label className="file-field">Upload profile picture<input name="imageFile" type="file" accept="image/*"/></label>{p?.image?.startsWith("data:")&&<small className="muted">A profile picture is currently stored as an uploaded image. Upload a new file to replace it, or enter a URL to replace it.</small>}<input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
  if(type==="delete-player")return <div className="modal"><form onSubmit={e=>{e.preventDefault();api("player.delete",{id:selected.id})}}><h2>Delete {selected.ign}?</h2><p>This safely removes them from active rankings while keeping historical transactions intact.</p><button className="danger">Confirm deletion</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 if (type === "category-points") {
     if (!selected) return null;
