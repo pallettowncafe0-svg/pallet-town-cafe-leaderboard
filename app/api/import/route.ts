@@ -109,8 +109,9 @@ export async function POST(request: NextRequest) {
     const categoryRows = getSheet(workbook, ["Category Leaderboards"]);
     const matchRows = getSheet(workbook, ["Match History"]);
     const pokemonRows = getSheet(workbook, ["Pokemon Records"]);
+    const highScoreRows = getSheet(workbook, ["PokéCompare High Scores", "PokeCompare High Scores"]);
 
-    if (!lifetimeRows.length && !pointRows.length && !categoryRows.length && !matchRows.length && !pokemonRows.length) {
+    if (!lifetimeRows.length && !pointRows.length && !categoryRows.length && !matchRows.length && !pokemonRows.length && !highScoreRows.length) {
       throw new Error(
         `No supported backup sheets were found. Found: ${workbook.SheetNames.join(", ") || "none"}`
       );
@@ -134,6 +135,11 @@ export async function POST(request: NextRequest) {
     await db.categoryRecord.deleteMany({});
     await db.category.deleteMany({});
     await db.player.deleteMany({});
+    await db.setting.upsert({
+      where: { key: "pokecompare_highscores" },
+      create: { key: "pokecompare_highscores", value: "[]" },
+      update: { value: "[]" },
+    });
 
     const players = await db.player.findMany();
     const playerById = new Map(players.map((player) => [player.id, player]));
@@ -530,13 +536,30 @@ export async function POST(request: NextRequest) {
       ? ` Skipped ${skippedMatches} match rows (${Array.from(skippedMatchReasons).join("; ")}).`
       : "";
 
+    const importedHighScores = highScoreRows
+      .map((row) => ({
+        score: Math.max(0, Math.trunc(number(row["Score"]))),
+        name: getRowValue(row, ["Name", "Player", "Initials"]).slice(0, 16),
+        note: getRowValue(row, ["Message", "Note"]).slice(0, 24),
+        createdAt: dateValue(row["Date"]).toISOString(),
+      }))
+      .filter((entry) => entry.score > 0 && entry.name)
+      .sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt))
+      .slice(0, 10);
+
+    await db.setting.upsert({
+      where: { key: "pokecompare_highscores" },
+      create: { key: "pokecompare_highscores", value: JSON.stringify(importedHighScores) },
+      update: { value: JSON.stringify(importedHighScores) },
+    });
+
     return NextResponse.json({
       ok: true,
       message:
         `Import replaced the current data: ${matchesAdded} matches imported, ` +
         `${playersAdded} players added, ${playersUpdated} players updated, ` +
         `${transactionsAdded} point transactions added, ${categoryRecordsImported} category records imported, ` +
-        `${pokemonUpdated} Pokémon board sets updated.${skippedMessage}`,
+        `${pokemonUpdated} Pokémon board sets updated, ${importedHighScores.length} PokéCompare high scores restored.${skippedMessage}`,
       counts: {
         playersAdded,
         playersUpdated,
@@ -547,6 +570,7 @@ export async function POST(request: NextRequest) {
         categoryRecordsImported,
         pokemonUpdated,
         skippedMatches,
+        highScoresImported: importedHighScores.length,
       },
     });
   } catch (error) {

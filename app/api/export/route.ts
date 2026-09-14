@@ -29,12 +29,13 @@ export async function GET() {
   try {
     await requireAdmin();
 
-    const [players, categories, transactions, matches, records] = await Promise.all([
+    const [players, categories, transactions, matches, records, highScoreSetting] = await Promise.all([
       db.player.findMany({ where: { active: true }, orderBy: [{ points: "desc" }, { name: "asc" }] }),
       db.category.findMany({ include: { records: { where: { player: { active: true } }, include: { player: true } } }, orderBy: { name: "asc" } }),
       db.pointTransaction.findMany({ include: { player: true, category: true }, orderBy: { createdAt: "desc" } }),
       db.match.findMany({ include: { category: true, winner: true, loser: true }, orderBy: { playedAt: "desc" } }),
       db.categoryRecord.findMany({ where: { player: { active: true } }, include: { category: true, player: true }, orderBy: { category: { name: "asc" } } }),
+      db.setting.findUnique({ where: { key: "pokecompare_highscores" } }),
     ]);
 
     const lifetime = players.map((player, index) => ({
@@ -113,6 +114,24 @@ export async function GET() {
       });
     }
 
+    let highScores: any[] = [];
+    if (highScoreSetting?.value) {
+      try {
+        const parsed = JSON.parse(highScoreSetting.value);
+        highScores = Array.isArray(parsed) ? parsed.slice(0, 10) : [];
+      } catch {
+        highScores = [];
+      }
+    }
+
+    const highScoreRows = highScores.map((entry, index) => ({
+      "Rank": index + 1,
+      "Score": Number(entry.score) || 0,
+      "Name": String(entry.name || ""),
+      "Message": String(entry.note || ""),
+      "Date": entry.createdAt ? new Date(entry.createdAt) : new Date(),
+    }));
+
     const workbook = XLSX.utils.book_new();
     const addSheet = (name: string, data: Record<string, unknown>[]) => {
       const sheet = XLSX.utils.json_to_sheet(data);
@@ -124,6 +143,7 @@ export async function GET() {
     addSheet("Category Leaderboards", categoryLeaderboard);
     addSheet("Match History", matchHistory);
     addSheet("Pokemon Records", pokemonRecords);
+    addSheet("PokéCompare High Scores", highScoreRows);
 
     const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
     const filename = `ptc-leaderboard-backup-${new Date().toISOString().slice(0, 10)}.xlsx`;

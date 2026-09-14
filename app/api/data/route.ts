@@ -11,6 +11,7 @@ export async function GET() {
     matches,
     background,
     logo,
+    pokeCompareHighScores,
     categoryTransactions,
   ] = await Promise.all([
     db.player.findMany({
@@ -64,6 +65,12 @@ export async function GET() {
     db.setting.findUnique({
       where: {
         key: "logo",
+      },
+    }),
+
+    db.setting.findUnique({
+      where: {
+        key: "pokecompare_highscores",
       },
     }),
 
@@ -157,6 +164,16 @@ export async function GET() {
     };
   });
 
+  let parsedHighScores: any[] = [];
+  if (pokeCompareHighScores?.value) {
+    try {
+      const value = JSON.parse(pokeCompareHighScores.value);
+      parsedHighScores = Array.isArray(value) ? value.slice(0, 10) : [];
+    } catch {
+      parsedHighScores = [];
+    }
+  }
+
   return NextResponse.json({
     players,
     categories,
@@ -164,6 +181,7 @@ export async function GET() {
     matches,
     background: background?.value || null,
     logo: logo?.value || null,
+    pokeCompareHighScores: parsedHighScores,
     isAdmin: await isAdmin(),
   });
 }

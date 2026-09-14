@@ -1,7 +1,8 @@
 "use client";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean};
-const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false};
+type HighScore={score:number;name:string;note:string;createdAt:string};
+type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[]};
+const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false,pokeCompareHighScores:[]};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
 function Avatar({player,className=""}:{player:any;className?:string}) {
@@ -215,7 +216,7 @@ function gameDisplayName(name:string){
   return String(name||"").split("-").map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(" ");
 }
 
-function HigherLowerGame(){
+function HigherLowerGame({highScores,onScoresChange}:{highScores:HighScore[];onScoresChange:(scores:HighScore[])=>void}){
   const [current,setCurrent]=useState<GamePokemon|null>(null);
   const [next,setNext]=useState<GamePokemon|null>(null);
   const [metric,setMetric]=useState<(typeof HIGHER_LOWER_METRICS)[number]>(HIGHER_LOWER_METRICS[0]);
@@ -226,9 +227,15 @@ function HigherLowerGame(){
   const [correct,setCorrect]=useState<boolean|null>(null);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
+  const [gameOver,setGameOver]=useState(false);
+  const [qualifies,setQualifies]=useState(false);
+  const [submitted,setSubmitted]=useState(false);
+  const [playerName,setPlayerName]=useState("");
+  const [playerNote,setPlayerNote]=useState("");
+  const [submitting,setSubmitting]=useState(false);
 
   useEffect(()=>{
-    const saved=Number(window.localStorage.getItem("ptc-higher-lower-best")||0);
+    const saved=Number(window.localStorage.getItem("ptc-pokecompare-best")||0);
     if(Number.isFinite(saved))setBest(saved);
   },[]);
 
@@ -265,13 +272,16 @@ function HigherLowerGame(){
   };
 
   const loadRound=async(first?:GamePokemon)=>{
-    setLoading(true);setError("");setRevealed(false);setCorrect(null);
+    setLoading(true);setError("");setRevealed(false);setCorrect(null);setGameOver(false);setSubmitted(false);
     try{
       const base=first||await fetchPokemon(randomId());
+      const chosen=HIGHER_LOWER_METRICS[Math.floor(Math.random()*HIGHER_LOWER_METRICS.length)];
       let challenger=await fetchPokemon(randomId(base.id));
       let tries=0;
-      while(challenger.id===base.id&&tries<5){challenger=await fetchPokemon(randomId(base.id));tries++;}
-      const chosen=HIGHER_LOWER_METRICS[Math.floor(Math.random()*HIGHER_LOWER_METRICS.length)];
+      while(valueFor(challenger,chosen.key)===valueFor(base,chosen.key)&&tries<8){
+        challenger=await fetchPokemon(randomId(base.id));
+        tries+=1;
+      }
       setCurrent(base);setNext(challenger);setMetric(chosen);
     }catch{
       setError("Could not load the Pokémon. Try again.");
@@ -279,106 +289,165 @@ function HigherLowerGame(){
   };
 
   const start=async()=>{
-    setScore(0);setStarted(true);await loadRound();
+    setScore(0);setStarted(true);setGameOver(false);setQualifies(false);setPlayerName("");setPlayerNote("");await loadRound();
   };
 
-  const guess=async(direction:"higher"|"lower")=>{
+  const guess=(direction:"higher"|"lower")=>{
     if(!current||!next||revealed||loading)return;
     const currentValue=valueFor(current,metric.key);
     const nextValue=valueFor(next,metric.key);
-    const isCorrect=direction==="higher"?nextValue>=currentValue:nextValue<=currentValue;
+    const isCorrect=direction==="higher"?nextValue>currentValue:nextValue<currentValue;
     setRevealed(true);setCorrect(isCorrect);
     if(isCorrect){
       const newScore=score+1;
       setScore(newScore);
-      if(newScore>best){setBest(newScore);window.localStorage.setItem("ptc-higher-lower-best",String(newScore));}
+      if(newScore>best){setBest(newScore);window.localStorage.setItem("ptc-pokecompare-best",String(newScore));}
+    } else {
+      setGameOver(true);
+      const qualifiesNow=highScores.length<10 || score>Number(highScores[highScores.length-1]?.score||0);
+      setQualifies(score>0 && qualifiesNow);
     }
   };
 
   const continueGame=async()=>{
     if(!current||!next)return;
-    if(correct){await loadRound(next);}
-    else {setStarted(false);setCurrent(null);setNext(null);setRevealed(false);setCorrect(null);}
+    if(correct){await loadRound(next);return;}
+    setStarted(false);setCurrent(null);setNext(null);setRevealed(false);setCorrect(null);setGameOver(false);
+  };
+
+  const submitHighScore=async(event:FormEvent)=>{
+    event.preventDefault();
+    if(!playerName.trim()||score<1||submitting)return;
+    setSubmitting(true);setError("");
+    try{
+      const response=await fetch("/api/pokecompare/score",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({score,name:playerName,note:playerNote}),
+      });
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||"Could not save high score.");
+      onScoresChange(Array.isArray(result.scores)?result.scores:highScores);
+      setSubmitted(true);
+    }catch(err){
+      setError(err instanceof Error?err.message:"Could not save high score.");
+    }finally{setSubmitting(false);}
   };
 
   return (
-    <div className="higher-lower-page">
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">MINI GAME</p>
-          <h2>Higher or Lower</h2>
+    <div className="pokecompare-page">
+      <div className="pokecompare-main">
+        <div className="pokecompare-titlebar">
+          <div>
+            <p className="eyebrow">ARCADE MINI GAME</p>
+            <h2>PokéCompare</h2>
+            <p className="pokecompare-sub">Guess higher or lower. Keep the streak alive.</p>
+          </div>
+          <div className="arcade-score">
+            <span>STREAK <b>{score}</b></span>
+            <span>BEST <b>{best}</b></span>
+          </div>
         </div>
-        <div className="game-score">
-          <span>BEST <b>{best}</b></span>
-          <span>STREAK <b>{score}</b></span>
-        </div>
+
+        {!started ? (
+          <article className="pokecompare-start">
+            <div className="arcade-badge">PC</div>
+            <p className="arcade-kicker">CAN YOU BEAT THE BOARD?</p>
+            <h3>PokéCompare</h3>
+            <p>Compare two Pokémon using a randomly selected stat. Pick higher or lower and build the longest streak you can.</p>
+            <div className="arcade-metrics">
+              {HIGHER_LOWER_METRICS.map(metricOption=><span key={metricOption.key}>{metricOption.label}</span>)}
+            </div>
+            <button className="button arcade-start" onClick={()=>void start()}>START GAME</button>
+          </article>
+        ) : (
+          <>
+            <div className="game-question">
+              <span>WILL THE NEXT POKÉMON HAVE</span>
+              <strong>{metric.label.toUpperCase()}</strong>
+              <span>{next&&current?`HIGHER OR LOWER THAN ${gameDisplayName(current.name).toUpperCase()}?`:""}</span>
+            </div>
+
+            <div className="higher-lower-board">
+              <article className="game-pokemon current-pokemon">
+                <span className="game-card-label">CURRENT</span>
+                {current?.sprite&&<img src={current.sprite} alt={gameDisplayName(current.name)}/>} 
+                <h3>{gameDisplayName(current?.name||"")}</h3>
+                <div className="game-types">{current?.types.map(type=><span key={type}>{type}</span>)}</div>
+                <b>{current&&formatValue(current,metric.key)}</b>
+              </article>
+
+              <div className="game-vs">VS</div>
+
+              <article className={`game-pokemon next-pokemon${revealed?(correct?" correct":" wrong"):""}`}>
+                <span className="game-card-label">NEXT</span>
+                {next?.sprite&&<img src={next.sprite} alt={gameDisplayName(next.name)}/>} 
+                <h3>{gameDisplayName(next?.name||"")}</h3>
+                <div className="game-types">{next?.types.map(type=><span key={type}>{type}</span>)}</div>
+                <b>{revealed&&next?formatValue(next,metric.key):"?"}</b>
+              </article>
+            </div>
+
+            {!revealed ? (
+              <div className="game-choices">
+                <button className="higher-choice" onClick={()=>guess("higher")} disabled={loading}>▲ HIGHER</button>
+                <button className="lower-choice" onClick={()=>guess("lower")} disabled={loading}>▼ LOWER</button>
+              </div>
+            ) : gameOver ? (
+              <div className="game-over-panel">
+                <div>
+                  <span className="game-over-label">GAME OVER</span>
+                  <strong>{score} <small>STREAK</small></strong>
+                </div>
+                {qualifies&&!submitted ? (
+                  <form className="highscore-entry" onSubmit={submitHighScore}>
+                    <p>NEW HIGH SCORE — ENTER YOUR NAME</p>
+                    <div className="highscore-fields">
+                      <input value={playerName} onChange={event=>setPlayerName(event.target.value.slice(0,16))} maxLength={16} required placeholder="Name / initials" />
+                      <input value={playerNote} onChange={event=>setPlayerNote(event.target.value.slice(0,24))} maxLength={24} placeholder="Message (optional)" />
+                    </div>
+                    <button className="button" disabled={submitting}>{submitting?"SAVING…":"SAVE SCORE"}</button>
+                  </form>
+                ) : submitted ? (
+                  <p className="highscore-saved">SCORE ENTERED — CHECK THE HIGH SCORE BOARD</p>
+                ) : null}
+                <button className="button arcade-again" onClick={()=>void start()}>PLAY AGAIN</button>
+              </div>
+            ) : (
+              <div className={`game-result ${correct?"is-correct":"is-wrong"}`}>
+                <strong>{correct?"CORRECT!":"WRONG!"}</strong>
+                <span>{gameDisplayName(next?.name||"")} has {next&&formatValue(next,metric.key)} {metric.label.toLowerCase()}.</span>
+                <button className="button" onClick={()=>void continueGame()}>{correct?"NEXT ROUND":"PLAY AGAIN"}</button>
+              </div>
+            )}
+            {error&&<p className="game-error">{error}</p>}
+          </>
+        )}
       </div>
 
-      {!started ? (
-        <article className="game-intro">
-          <div className="game-intro-icon">↕</div>
-          <h3>Pokémon Higher or Lower</h3>
-          <p>
-            A new Pokémon appears every round. Guess whether it has a higher or lower
-            value than the Pokémon before it. The stat changes every round.
-          </p>
-          <div className="game-rules">
-            <span>⚔ HP</span><span>⚡ Speed</span><span>🛡 Defense</span><span>📏 Height</span><span>⚖ Weight</span><span>＋ BST</span>
-          </div>
-          <button className="button game-start" onClick={()=>void start()}>Start Game</button>
-          {error&&<p className="game-error">{error}</p>}
-        </article>
-      ) : (
-        <>
-          <div className="game-question">
-            <span>WILL THE NEXT POKÉMON HAVE</span>
-            <strong>{metric.label.toUpperCase()}</strong>
-            <span>THAN {gameDisplayName(current?.name||"").toUpperCase()}?</span>
-          </div>
-
-          <div className="higher-lower-board">
-            <article className="game-pokemon current-pokemon">
-              <span className="game-card-label">CURRENT</span>
-              {current?.sprite&&<img src={current.sprite} alt={gameDisplayName(current.name)}/>} 
-              <h3>{gameDisplayName(current?.name||"")}</h3>
-              <div className="game-types">{current?.types.map(type=><span key={type}>{type}</span>)}</div>
-              <b>{current&&formatValue(current,metric.key)}</b>
-            </article>
-
-            <div className="game-vs">VS</div>
-
-            <article className={`game-pokemon next-pokemon${revealed?(correct?" correct":" wrong"):""}`}>
-              <span className="game-card-label">NEXT</span>
-              {next?.sprite&&<img src={next.sprite} alt={gameDisplayName(next.name)}/>} 
-              <h3>{gameDisplayName(next?.name||"")}</h3>
-              <div className="game-types">{next?.types.map(type=><span key={type}>{type}</span>)}</div>
-              <b>{revealed&&next?formatValue(next,metric.key):"?"}</b>
-            </article>
-          </div>
-
-          {!revealed ? (
-            <div className="game-choices">
-              <button className="higher-choice" onClick={()=>void guess("higher")} disabled={loading}>▲ HIGHER</button>
-              <button className="lower-choice" onClick={()=>void guess("lower")} disabled={loading}>▼ LOWER</button>
-            </div>
-          ) : (
-            <div className={`game-result ${correct?"is-correct":"is-wrong"}`}>
-              <strong>{correct?"CORRECT!":"WRONG!"}</strong>
-              <span>
-                {gameDisplayName(next?.name||"")} has {next&&formatValue(next,metric.key)} {metric.label.toLowerCase()}.
-              </span>
-              <button className="button" onClick={()=>void continueGame()}>
-                {correct?"Next Round":"Play Again"}
-              </button>
-            </div>
-          )}
-          {error&&<p className="game-error">{error}</p>}
-        </>
-      )}
+      <aside className="pokecompare-highscores">
+        <div className="highscore-marquee">HIGH SCORES</div>
+        <div className="highscore-subtitle">TOP 10 · POKÉCOMPARE</div>
+        <div className="highscore-list">
+          {Array.from({length:10},(_,index)=>{
+            const entry=highScores[index];
+            return (
+              <div className={`highscore-row${entry?" filled":" empty"}`} key={entry?`${entry.createdAt}-${index}`:`empty-${index}`}>
+                <span className="highscore-rank">{String(index+1).padStart(2,"0")}</span>
+                <span className="highscore-player">
+                  <strong>{entry?.name||"—"}</strong>
+                  <small>{entry?.note||""}</small>
+                </span>
+                <b>{entry?entry.score:"-"}</b>
+              </div>
+            );
+          })}
+        </div>
+        <div className="highscore-footer">INSERT COINS · BEAT YOUR SCORE</div>
+      </aside>
     </div>
   );
 }
-
 export default function LeaderboardApp(){
  const [data,setData]=useState<Data>(empty);
  const [view,setView]=useState("hall");
@@ -871,7 +940,7 @@ useEffect(() => {
      }
 
 
-     {view==="games"&&<HigherLowerGame/>}
+     {view==="games"&&<HigherLowerGame highScores={data.pokeCompareHighScores} onScoresChange={scores=>setData(current=>({...current,pokeCompareHighScores:scores}))}/>}
 
 
      {view==="battle"&&
@@ -1404,9 +1473,13 @@ function Modal({
             <button className="button">Use PTC Logo</button>
           </form>
 
-          <button type="button" className="link" onClick={close}>
-            Close
-          </button>
+          <div className="admin-control-actions">
+            <button type="button" className="danger admin-logout" onClick={async()=>{
+              const response=await fetch("/api/admin/logout",{method:"POST"});
+              if(response.ok){await reload();close();}
+            }}>Log Out</button>
+            <button type="button" className="link" onClick={close}>Close</button>
+          </div>
         </div>
       </div>
     );
