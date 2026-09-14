@@ -536,3 +536,6 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   }
   .pokecompare-timer b{font-size:34px}
 }
+
+/* PokéCompare: keep the unrevealed Pokémon completely hidden until the guess. */
+.next-hidden-mark{font-size:58px;font-weight:900;color:var(--gold);display:flex;align-items:center;justify-content:center;flex:1;min-height:220px}
