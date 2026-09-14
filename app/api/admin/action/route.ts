@@ -60,9 +60,79 @@ export async function POST(request:NextRequest) {
    else if(action==="player.update") { const existing=await db.player.findUniqueOrThrow({where:{id:payload.id}}); const points=Number(payload.points); await db.player.update({where:{id:payload.id},data:{name:payload.name,ign:payload.ign,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null,points}}); if(points!==existing.points) await db.pointTransaction.create({data:{playerId:payload.id,amount:points-existing.points,newTotal:points,reason:"Profile point correction",action:"Points edited",actor:"Admin"}}); }
   else if(action==="player.delete") { await db.player.update({where:{id:payload.id},data:{active:false,ign:`deleted-${payload.id}`}}); }
   else if(action==="points") { const player=await db.player.findUniqueOrThrow({where:{id:payload.playerId}}); const amount=Number(payload.amount); if(!Number.isInteger(amount)||amount===0) throw new Error("Enter a whole non-zero point amount"); const total=player.points+amount; await db.$transaction([db.player.update({where:{id:player.id},data:{points:total}}),db.pointTransaction.create({data:{playerId:player.id,amount,newTotal:total,reason:payload.reason||null,action:amount>0?"Points awarded":"Points removed",actor:"Admin"}})]); }
+else if(action==="category.points") {
+  const player=await db.player.findUniqueOrThrow({
+    where:{id:payload.playerId}
+  });
+
+  const category=await db.category.findUniqueOrThrow({
+    where:{id:payload.categoryId}
+  });
+
+  const amount=Number(payload.amount);
+
+  if(!Number.isInteger(amount)||amount===0) {
+    throw new Error("Enter a whole non-zero point amount");
+  }
+
+  const total=player.points+amount;
+
+  await db.$transaction([
+    db.player.update({
+      where:{id:player.id},
+      data:{points:total}
+    }),
+
+    db.pointTransaction.create({
+      data:{
+        playerId:player.id,
+        categoryId:category.id,
+        amount,
+        newTotal:total,
+        reason:payload.reason||null,
+        action:`${category.name} points`,
+        actor:"Admin"
+      }
+    })
+  ]);
+}
   else if(action==="category.create") await db.category.create({data:{name:payload.name,description:payload.description||null}});
   else if(action==="category.update") await db.category.update({where:{id:payload.id},data:{name:payload.name,description:payload.description||null}});
-  else if(action==="category.delete") await db.category.delete({where:{id:payload.id}});
+  else if(action==="category.delete") {
+  const transactions=await db.pointTransaction.findMany({
+    where:{categoryId:payload.id},
+    select:{
+      playerId:true,
+      amount:true
+    }
+  });
+
+  const totals=new Map<string,number>();
+
+  for(const transaction of transactions) {
+    totals.set(
+      transaction.playerId,
+      (totals.get(transaction.playerId)||0)+transaction.amount
+    );
+  }
+
+  await db.$transaction([
+    ...Array.from(totals.entries()).map(([playerId,amount])=>
+      db.player.update({
+        where:{id:playerId},
+        data:{
+          points:{
+            decrement:amount
+          }
+        }
+      })
+    ),
+
+    db.category.delete({
+      where:{id:payload.id}
+    })
+  ]);
+}
    else if(action==="match.create") { if(payload.winnerId===payload.loserId) throw new Error("Choose two different players"); await db.$transaction(async(tx)=>{ await tx.match.create({data:{categoryId:payload.categoryId,winnerId:payload.winnerId,loserId:payload.loserId,notes:payload.notes||null,playedAt:date(payload.playedAt)}}); await recalculateCategory(payload.categoryId,tx); }); }
    else if(action==="match.update") {
     if(payload.winnerId===payload.loserId) throw new Error("Choose two different players");
