@@ -233,11 +233,35 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
   const [playerName,setPlayerName]=useState("");
   const [playerNote,setPlayerNote]=useState("");
   const [submitting,setSubmitting]=useState(false);
+  const [timeLeft,setTimeLeft]=useState(10);
+  const [nextCountdown,setNextCountdown]=useState<number|null>(null);
 
   useEffect(()=>{
     const saved=Number(window.localStorage.getItem("ptc-pokecompare-best")||0);
     if(Number.isFinite(saved))setBest(saved);
   },[]);
+
+  const finishForTimeout=()=>{
+    if(!current||!next||revealed||gameOver)return;
+    setRevealed(true);setCorrect(false);setGameOver(true);setNextCountdown(null);
+    const qualifiesNow=highScores.length<10 || score>Number(highScores[highScores.length-1]?.score||0);
+    setQualifies(score>0 && qualifiesNow);
+  };
+
+  useEffect(()=>{
+    if(!started||loading||revealed||gameOver)return;
+    const timer=window.setInterval(()=>{
+      setTimeLeft(value=>{
+        if(value<=1){
+          window.clearInterval(timer);
+          finishForTimeout();
+          return 0;
+        }
+        return value-1;
+      });
+    },1000);
+    return ()=>window.clearInterval(timer);
+  },[started,loading,revealed,gameOver,current,next,score,highScores.length]);
 
   const fetchRound=async(currentId?:number)=>{
     const query=currentId?`?currentId=${currentId}`:"";
@@ -256,7 +280,7 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
   };
 
   const loadRound=async(first?:GamePokemon)=>{
-    setLoading(true);setError("");setRevealed(false);setCorrect(null);setGameOver(false);setSubmitted(false);
+    setLoading(true);setError("");setRevealed(false);setCorrect(null);setGameOver(false);setSubmitted(false);setNextCountdown(null);setTimeLeft(10);
     try{
       const round=await fetchRound(first?.id);
       setCurrent(round.current);setNext(round.next);setMetric(round.metric);
@@ -279,12 +303,24 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
       const newScore=score+1;
       setScore(newScore);
       if(newScore>best){setBest(newScore);window.localStorage.setItem("ptc-pokecompare-best",String(newScore));}
+      setNextCountdown(5);
     } else {
       setGameOver(true);
       const qualifiesNow=highScores.length<10 || score>Number(highScores[highScores.length-1]?.score||0);
       setQualifies(score>0 && qualifiesNow);
     }
   };
+
+  useEffect(()=>{
+    if(nextCountdown===null||!current||!next||!correct)return;
+    if(nextCountdown<=0){
+      setNextCountdown(null);
+      void loadRound(next);
+      return;
+    }
+    const timer=window.setTimeout(()=>setNextCountdown(value=>value===null?null:value-1),1000);
+    return ()=>window.clearTimeout(timer);
+  },[nextCountdown,current,next,correct]);
 
   const continueGame=async()=>{
     if(!current||!next)return;
@@ -344,6 +380,10 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
           </article>
         ) : (
           <>
+            <div className={`pokecompare-timer${nextCountdown!==null?" next-timer":""}${timeLeft<=3&&nextCountdown===null?" urgent":""}`}>
+              {nextCountdown!==null ? (<>NEXT ROUND <b>{nextCountdown}</b></>) : <>TIME <b>{timeLeft}</b></>}
+            </div>
+
             <div className="game-question">
               <span>WILL THE NEXT POKÉMON HAVE</span>
               <strong>{metric.label.toUpperCase()}</strong>
@@ -372,8 +412,8 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
 
             {!revealed ? (
               <div className="game-choices">
-                <button className="higher-choice" onClick={()=>guess("higher")} disabled={loading}>▲ HIGHER</button>
-                <button className="lower-choice" onClick={()=>guess("lower")} disabled={loading}>▼ LOWER</button>
+                <button className="higher-choice" onClick={()=>guess("higher")} disabled={loading||nextCountdown!==null}>▲ HIGHER</button>
+                <button className="lower-choice" onClick={()=>guess("lower")} disabled={loading||nextCountdown!==null}>▼ LOWER</button>
               </div>
             ) : gameOver ? (
               <div className="game-over-panel">
@@ -399,7 +439,11 @@ function HigherLowerGame({highScores,onScoresChange,art}:{highScores:HighScore[]
               <div className={`game-result ${correct?"is-correct":"is-wrong"}`}>
                 <strong>{correct?"CORRECT!":"WRONG!"}</strong>
                 <span>{gameDisplayName(next?.name||"")} has {next&&formatValue(next,metric.key)} {metric.label.toLowerCase()}.</span>
-                <button className="button" onClick={()=>void continueGame()}>{correct?"NEXT ROUND":"PLAY AGAIN"}</button>
+                {correct ? (
+                    <span className="next-round-countdown">NEXT ROUND IN {nextCountdown ?? 5}</span>
+                  ) : (
+                    <button className="button" onClick={()=>void continueGame()}>PLAY AGAIN</button>
+                  )}
               </div>
             )}
             {error&&<p className="game-error">{error}</p>}
