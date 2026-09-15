@@ -149,6 +149,7 @@ export async function POST(request: NextRequest) {
     const pokemonRows = getSheet(workbook, ["Pokemon Records"]);
     const highScoreRows = getSheet(workbook, ["PokéCompare High Scores", "PokeCompare High Scores"]);
     const settingsRows = getSheet(workbook, ["PokéCompare Settings", "PokeCompare Settings"]);
+    const categorySettingsRows = getSheet(workbook, ["Category Settings", "Battle Board Settings"]);
 
     const supportedCount = [
       lifetimeRows,
@@ -158,6 +159,7 @@ export async function POST(request: NextRequest) {
       pokemonRows,
       highScoreRows,
       settingsRows,
+      categorySettingsRows,
     ].filter((rows) => rows.length > 0).length;
 
     if (!supportedCount) {
@@ -317,8 +319,18 @@ export async function POST(request: NextRequest) {
           return category;
         };
 
+        for (const row of categorySettingsRows) {
+          await ensureCategory(getRowValue(row, ["Category", "Board", "Name"]));
+        }
         for (const row of categoryRows) {
           await ensureCategory(getRowValue(row, ["Category", "Board"]));
+        }
+
+        for (const row of categorySettingsRows) {
+          const name = getRowValue(row, ["Category", "Board", "Name"]);
+          const category = await ensureCategory(name);
+          if (!category) continue;
+          await tx.category.update({where:{id:category.id},data:{description:getRowValue(row,["Description"])||null,image:getChunkedValue(row,"Image")||null}});
         }
 
         for (const row of categoryRows) {

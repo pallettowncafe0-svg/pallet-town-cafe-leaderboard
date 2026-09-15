@@ -155,6 +155,11 @@ export async function GET() {
     addSheet("Lifetime Leaderboard", lifetime);
     addSheet("Point History", pointHistory);
     addSheet("Category Leaderboards", categoryLeaderboard);
+    addSheet("Category Settings", categories.map((category) => ({
+      "Category": category.name,
+      "Description": category.description || "",
+      ...Object.fromEntries(Object.entries(splitForExcel(category.image || "")).map(([key, value]) => [`Image ${key.replace("Part ", "")}`, value])),
+    })));
     addSheet("Match History", matchHistory);
     addSheet("Pokemon Records", pokemonRecords);
     addSheet("PokéCompare High Scores", highScoreRows);

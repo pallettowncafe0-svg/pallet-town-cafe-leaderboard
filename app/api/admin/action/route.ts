@@ -166,8 +166,16 @@ else if(action==="category.points") {
       await rebuildPlayerPoints(existing.playerId,tx);
     });
   }
-  else if(action==="category.create") await db.category.create({data:{name:payload.name,description:payload.description||null}});
-  else if(action==="category.update") await db.category.update({where:{id:payload.id},data:{name:payload.name,description:payload.description||null}});
+  else if(action==="category.create") await db.category.create({data:{name:payload.name,description:payload.description||null,image:payload.image||null}});
+  else if(action==="category.update") await db.category.update({where:{id:payload.id},data:{name:payload.name,description:payload.description||null,image:payload.image||null}});
+  else if(action==="category.duplicate") {
+    const source=await db.category.findUniqueOrThrow({where:{id:payload.id}});
+    const name=String(payload.name||`${source.name} Copy`).trim();
+    if(!name) throw new Error("Enter a board name");
+    const existing=await db.category.findUnique({where:{name}});
+    if(existing) throw new Error("A battle board with that name already exists");
+    await db.category.create({data:{name,description:source.description||null,image:source.image||null}});
+  }
   else if(action==="category.delete") {
   const transactions=await db.pointTransaction.findMany({
     where:{categoryId:payload.id},

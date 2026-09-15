@@ -665,3 +665,19 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .battle-record-table .labels span:nth-child(4),
   .battle-record-table .labels span:nth-child(5){display:none;}
 }
+
+
+/* Final table alignment */
+.lifetime-table .row{grid-template-columns:90px minmax(0,1.8fr) minmax(130px,1fr) 100px}
+.lifetime-table .row > span:nth-child(3){white-space:nowrap}
+.lifetime-table .row > span:nth-child(4){text-align:right}
+.category-points-table .row{grid-template-columns:90px minmax(0,1fr) 120px}
+.category-points-table .row > span:nth-child(3){text-align:right}
+.field-label{display:block;color:#918f89;font-size:11px;font-weight:700;margin-top:8px}
+.field-label input{margin-top:5px}
+@media(max-width:850px){
+  .lifetime-table .row{grid-template-columns:45px 1fr 76px}
+  .lifetime-table .row span:nth-child(3),.lifetime-table .labels span:nth-child(3){display:none}
+  .category-points-table .row{grid-template-columns:45px 1fr 76px}
+  .category-points-table .row > span:nth-child(3){display:block}
+}

@@ -1182,7 +1182,7 @@ function Hall({players,query,setQuery,choose,admin,open}:any){
           </article>
         ))}
       </div>
-      <div className="table">
+      <div className="table lifetime-table">
         <div className="row labels"><span>RANK</span><span>PLAYER</span><span>STATUS</span><span>POINTS</span></div>
         {players.map((p:any)=><button className="row" key={p.id} onClick={()=>choose(p)}>
           <span className={`rank r${p.rank}`}>#{p.rank}</span>
@@ -1252,6 +1252,20 @@ function Category({
               onClick={() => open("match")}
             >
               Record Battle
+            </button>
+
+            <button
+              className="button ghost"
+              onClick={() => open("edit-category")}
+            >
+              Edit Board
+            </button>
+
+            <button
+              className="button ghost"
+              onClick={() => open("duplicate-category")}
+            >
+              Duplicate
             </button>
 
             <button
@@ -1326,7 +1340,7 @@ function Category({
       <h3>Category Points</h3>
 
       {category.pointLeaderboard?.length ? (
-        <div className="table">
+        <div className="table category-points-table">
           <div className="row labels">
             <span>RANK</span>
             <span>PLAYER</span>
@@ -1629,7 +1643,24 @@ function Modal({
     );
   }
 
-  if(type==="player"||type==="edit-player") {const p=type==="edit-player"?selected:null;return <div className="modal"><form onSubmit={e=>submit(e,p?"player.update":"player.create")}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" defaultValue={p?.ign||""} placeholder="In-game name (optional)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/><input name="image" type="url" defaultValue={p?.image||""} placeholder="Display picture URL (optional)"/><input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
+  if(type==="player"||type==="edit-player") {
+    const p=type==="edit-player"?selected:null;
+    return <div className="modal"><form onSubmit={async e=>{
+      e.preventDefault();
+      const form=e.currentTarget;
+      const values:any=Object.fromEntries(new FormData(form));
+      const fileInput=form.elements.namedItem("imageFile") as HTMLInputElement;
+      const file=fileInput?.files?.[0];
+      if(file){
+        if(file.size>2*1024*1024){alert("Profile picture must be 2 MB or smaller.");return;}
+        const reader=new FileReader();
+        reader.onload=()=>{void api(p?"player.update":"player.create",{...values,image:reader.result});};
+        reader.readAsDataURL(file);
+        return;
+      }
+      await api(p?"player.update":"player.create",values);
+    }}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" defaultValue={p?.ign||""} placeholder="In-game name (optional)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/><label className="field-label">Display picture URL (optional)<input name="image" type="url" defaultValue={p?.image?.startsWith("data:image/")?"":(p?.image||"")} placeholder="Image URL"/></label><label className="field-label">Or upload a picture<input name="imageFile" type="file" accept="image/*"/></label><p className="muted">An uploaded picture replaces the URL. Maximum 2 MB.</p><input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>
+  }
  if(type==="delete-player")return <div className="modal"><form onSubmit={e=>{e.preventDefault();api("player.delete",{id:selected.id})}}><h2>Delete {selected.ign}?</h2><p>This safely removes them from active rankings while keeping historical transactions intact.</p><button className="danger">Confirm deletion</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 if (type === "category-points") {
     if (!selected) return null;
@@ -1873,6 +1904,19 @@ if (type === "category-points") {
 
   if(type==="category")return <div className="modal"><form onSubmit={e=>submit(e,"category.create")}><h2>Create Battle Category</h2><input name="name" required placeholder="Category name"/><textarea name="description" placeholder="Description"/><button className="button">Create Category</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 
+if(type==="edit-category") { const c=selected; return <div className="modal"><form onSubmit={async e=>{
+    e.preventDefault();
+    const form=e.currentTarget;
+    const values:any=Object.fromEntries(new FormData(form));
+    const fileInput=form.elements.namedItem("imageFile") as HTMLInputElement;
+    const file=fileInput?.files?.[0];
+    const save=(image:any)=>api("category.update",{...values,id:c.id,image:image||values.image||null});
+    if(file){
+      if(file.size>2*1024*1024){alert("Board image must be 2 MB or smaller.");return;}
+      const reader=new FileReader(); reader.onload=()=>{void save(reader.result)}; reader.readAsDataURL(file);
+    } else await save(values.image||null);
+  }}><h2>Edit Battle Board</h2><input name="name" required defaultValue={c?.name||""} placeholder="Board name"/><textarea name="description" placeholder="Description">{c?.description||""}</textarea><label className="field-label">Board image URL (optional)<input name="image" type="url" defaultValue={c?.image?.startsWith("data:image/")?"":(c?.image||"")} placeholder="Image URL"/></label><label className="field-label">Or upload a board image<input name="imageFile" type="file" accept="image/*"/></label><p className="muted">Changing the board does not alter its matches or standings.</p><button className="button">Save Board</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
+if(type==="duplicate-category") { const c=selected; return <div className="modal"><form onSubmit={e=>submit(e,"category.duplicate")}><h2>Duplicate Battle Board</h2><p className="muted">Creates a new empty board using this board's name, description, and image. Matches, points, and standings are not copied.</p><input name="id" type="hidden" value={c?.id||""}/><input name="name" required defaultValue={`${c?.name||""} Copy`} placeholder="New board name"/><button className="button">Duplicate Board</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
 if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.preventDefault();api("category.delete",{id:selected.id})}}><h2>Delete Battle Category?</h2><p className="muted">This will permanently delete the current battle category and its battle records.</p><button className="button danger">Delete Category</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
  if(type==="match")return <div className="modal"><form onSubmit={e=>submit(e,"match.create")}><h2>Record Battle</h2><label>Battle board<select name="categoryId" required value={matchCategoryTarget} onChange={e=>setMatchCategoryTarget(e.target.value)}><option value="">Select battle board</option>{data.categories.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><select name="winnerId" required><option value="">Winner</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign || "No IGN"}</option>)}</select><select name="loserId" required><option value="">Loser</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign || "No IGN"}</option>)}</select><input name="playedAt" type="date"/><textarea name="notes" placeholder="Match notes (optional)"/><button className="button">Record Battle</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
   if(type==="edit-match"){const m=selected;return <div className="modal"><form onSubmit={e=>submit(e,"match.update")}><h2>Edit Battle</h2><input type="hidden" name="id" value={m.id}/><label>Battle category<select name="categoryId" required defaultValue={m.categoryId}>{data.categories.map((c:any)=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Winner<select name="winnerId" required defaultValue={m.winnerId}><option value="">Select winner</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign || "No IGN"}</option>)}</select></label><label>Loser<select name="loserId" required defaultValue={m.loserId}><option value="">Select loser</option>{data.players.map((p:any)=><option key={p.id} value={p.id}>{p.name} / {p.ign || "No IGN"}</option>)}</select></label><label>Date played<input name="playedAt" type="date" required defaultValue={new Date(m.playedAt).toISOString().slice(0,10)}/></label><textarea name="notes" defaultValue={m.notes||""} placeholder="Match notes (optional)"/><button className="button">Save Battle</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>}
