@@ -946,12 +946,12 @@ useEffect(() => {
 
      <b className="hero-stat">
       {stats.points.toLocaleString()}
-      <small>Total Points</small>
+      <small>Champion Points</small>
      </b>
 
      <b className="hero-stat">
       {stats.battles}
-      <small>Recorded Battles</small>
+      <small>Total Battles</small>
      </b>
 
     </div>
@@ -1203,12 +1203,12 @@ function Players({players,query,setQuery,choose,admin,open}:any){
     <label className="search">Search<input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Find a trainer…"/></label>
     <div className="cards players-grid">
       {players.map((p:any)=><button className="player-card" onClick={()=>choose(p)} key={p.id}>
-        <Avatar player={p}/>
         <span className="player-card-info">
           <strong>{p.name}</strong>
           <small>{p.ign || "No IGN"}</small>
           <b>{p.points} pts</b>
         </span>
+        <span className="player-card-avatar"><Avatar player={p}/></span>
         {p.hallPokemon?.length ? <span className="player-card-pokemon"><PokemonSprites pokemon={p.hallPokemon} compact/></span> : null}
       </button>)}
     </div>

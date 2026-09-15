@@ -58,30 +58,29 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .champion-display{height:42px;display:flex;align-items:center;justify-content:flex-end;gap:10px}
 @media(max-width:850px){.hero-stat{min-width:0}.champion-stat{min-width:0}.champion-display{height:38px}}
 
-/* V12.5 — Players card layout and Pokémon Higher / Lower mini game */
+/* Final player-card layout */
 .players-grid .player-card{
   display:grid;
-  grid-template-columns:42px minmax(0,1fr) 132px;
-  gap:10px;
-  align-items:center;
-  min-height:145px;
+  grid-template-columns:minmax(0,1fr) 174px;
+  grid-template-rows:auto 58px;
+  gap:8px 14px;
+  align-items:start;
+  min-height:166px;
   padding:16px;
 }
-.players-grid .player-card > .avatar{
-  width:40px;
-  height:40px;
-  align-self:start;
-  margin-top:2px;
-}
+.players-grid .player-card:hover{transform:translateY(-2px)}
 .player-card-info{
   min-width:0;
-  display:block;
+  grid-column:1;
+  grid-row:1;
   align-self:start;
+  display:block;
   padding-top:2px;
+  text-align:left;
 }
 .player-card-info strong{
   display:block;
-  font-size:18px;
+  font-size:19px;
   line-height:1.08;
   overflow-wrap:anywhere;
   word-break:break-word;
@@ -93,27 +92,44 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 .player-card-info b{
   display:block;
-  margin-top:14px;
+  margin-top:12px;
+}
+.player-card-avatar{
+  grid-column:1;
+  grid-row:2;
+  display:flex;
+  align-items:flex-end;
+  justify-content:flex-start;
+  min-height:58px;
+}
+.players-grid .player-card-avatar .avatar{
+  width:48px;
+  height:48px;
+  flex:0 0 48px;
 }
 .player-card-pokemon{
-  width:132px;
-  min-width:132px;
+  grid-column:2;
+  grid-row:1 / span 2;
+  width:174px;
+  min-width:174px;
+  height:116px;
   display:flex;
   align-items:center;
   justify-content:center;
+  align-self:center;
 }
 .player-card-pokemon .pokemon-sprites{
-  grid-template-columns:repeat(3,40px);
-  grid-template-rows:repeat(2,40px);
-  width:126px;
-  min-height:84px;
+  grid-template-columns:repeat(3,52px);
+  grid-template-rows:repeat(2,52px);
+  width:162px;
+  min-height:108px;
   gap:2px 3px;
   margin:0;
 }
 .player-card-pokemon .pokemon-sprites.compact .pokemon-slot,
 .player-card-pokemon .pokemon-sprites.compact img{
-  width:40px;
-  height:40px;
+  width:52px;
+  height:52px;
 }
 
 .higher-lower-page{max-width:980px;margin:0 auto}
@@ -610,4 +626,28 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 }
 @media(max-width:850px){
   .game-hidden-pokemon{min-height:170px;font-size:52px}
+}
+/* Final hero stat alignment */
+.hero-stats{align-items:flex-start}
+.hero-stat{min-width:120px;min-height:68px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start;line-height:1.05;padding-top:0}
+.champion-stat{min-width:190px}
+.champion-display{height:42px;display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.champion-stat small,.hero-stat small{margin-top:6px}
+@media(max-width:850px){.hero-stat{min-width:0}.champion-stat{min-width:0}.champion-display{height:38px}}
+
+
+@media(max-width:850px){
+  .players-grid .player-card{
+    grid-template-columns:minmax(0,1fr) 126px;
+    grid-template-rows:auto 48px;
+    min-height:138px;
+    padding:13px;
+    gap:6px 10px;
+  }
+  .player-card-avatar{min-height:48px}
+  .players-grid .player-card-avatar .avatar{width:40px;height:40px;flex-basis:40px}
+  .player-card-pokemon{width:126px;min-width:126px;height:90px}
+  .player-card-pokemon .pokemon-sprites{grid-template-columns:repeat(3,38px);grid-template-rows:repeat(2,38px);width:117px;min-height:80px}
+  .player-card-pokemon .pokemon-sprites.compact .pokemon-slot,
+  .player-card-pokemon .pokemon-sprites.compact img{width:38px;height:38px}
 }
