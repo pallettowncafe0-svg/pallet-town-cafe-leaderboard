@@ -1058,6 +1058,7 @@ useEffect(() => {
        choose={choosePlayer}
        admin={data.isAdmin}
        open={setModal}
+       setSelectedCategory={setSelectedCategory}
       />
      }
 
@@ -1221,7 +1222,13 @@ function Category({
   choose,
   admin,
   open,
+  setSelectedCategory,
 }: any) {
+  const openCategoryModal = (type: string) => {
+    setSelectedCategory(category);
+    open(type);
+  };
+
   return (
     <>
       <div className="section-head">
@@ -1235,42 +1242,42 @@ function Category({
           <div>
             <button
               className="button ghost"
-              onClick={() => open("pokemon")}
+              onClick={() => openCategoryModal("pokemon")}
             >
               Set Pokémon
             </button>
 
             <button
               className="button ghost"
-              onClick={() => open("category-points")}
+              onClick={() => openCategoryModal("category-points")}
             >
               Award Points
             </button>
 
             <button
               className="button"
-              onClick={() => open("match")}
+              onClick={() => openCategoryModal("match")}
             >
               Record Battle
             </button>
 
             <button
               className="button ghost"
-              onClick={() => open("edit-category")}
+              onClick={() => openCategoryModal("edit-category")}
             >
               Edit Board
             </button>
 
             <button
               className="button ghost"
-              onClick={() => open("duplicate-category")}
+              onClick={() => openCategoryModal("duplicate-category")}
             >
               Duplicate
             </button>
 
             <button
               className="danger"
-              onClick={() => open("delete-category")}
+              onClick={() => openCategoryModal("delete-category")}
             >
               Delete Category
             </button>
