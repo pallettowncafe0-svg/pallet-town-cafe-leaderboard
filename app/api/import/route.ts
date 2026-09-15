@@ -49,6 +49,20 @@ function getRowValue(row: Row, keys: string[]) {
   return "";
 }
 
+function getChunkedValue(row: Row, prefix: string) {
+  const parts: string[] = [];
+  const direct = text(row[prefix]);
+  if (direct) parts.push(direct);
+
+  for (let index = 1; index <= 100; index += 1) {
+    const value = text(row[`${prefix} ${index}`]);
+    if (!value) break;
+    parts.push(value);
+  }
+
+  return parts.join("");
+}
+
 function getSheet(workbook: XLSX.WorkBook, names: string[]) {
   const wanted = names.map((name) => name.toLowerCase().trim());
   const actual = workbook.SheetNames.find((name) =>
@@ -242,6 +256,7 @@ export async function POST(request: NextRequest) {
           ign: ign || null,
           points: Math.trunc(number(row["Lifetime Points"])),
           bestPerformance: getRowValue(row, ["Best Performance"]) || null,
+          image: getChunkedValue(row, "Profile Picture") || null,
           active: true,
         },
       });
@@ -561,7 +576,7 @@ export async function POST(request: NextRequest) {
     });
 
     const importedArt = pokeCompareSettingsRows.length
-      ? getRowValue(pokeCompareSettingsRows[0], ["Artwork", "Art", "Image"])
+      ? (getChunkedValue(pokeCompareSettingsRows[0], "Artwork") || getRowValue(pokeCompareSettingsRows[0], ["Art", "Image"]))
       : "";
 
     const importedHideDetails = pokeCompareSettingsRows.length

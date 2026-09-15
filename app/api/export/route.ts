@@ -14,6 +14,17 @@ function parsePokemon(value: string | null) {
   };
 }
 
+const EXCEL_CELL_LIMIT = 30000;
+
+function splitForExcel(value: string) {
+  const chunks: Record<string, string> = {};
+  if (!value) return chunks;
+  for (let index = 0, start = 0; start < value.length; index += 1, start += EXCEL_CELL_LIMIT) {
+    chunks[`Part ${index + 1}`] = value.slice(start, start + EXCEL_CELL_LIMIT);
+  }
+  return chunks;
+}
+
 function pokemonColumns(value: string | null) {
   const list = value ? JSON.parse(value) : [];
   const result: Record<string, string> = {};
@@ -46,6 +57,7 @@ export async function GET() {
       "IGN": player.ign || "",
       "Lifetime Points": player.points,
       "Best Performance": player.bestPerformance || "",
+      ...Object.fromEntries(Object.entries(splitForExcel(player.image || "")).map(([key, value]) => [`Profile Picture ${key.replace("Part ", "")}`, value])),
       "Date Added": player.createdAt,
       "Last Updated": player.updatedAt,
     }));
@@ -152,7 +164,7 @@ export async function GET() {
     }
 
     addSheet("PokéCompare Settings", [{
-      "Artwork": pokeCompareArtSetting?.value || "",
+      ...Object.fromEntries(Object.entries(splitForExcel(pokeCompareArtSetting?.value || "")).map(([key, value]) => [`Artwork ${key.replace("Part ", "")}`, value])),
       "Hide High Score Details": hideHighScoreDetails ? "Yes" : "No",
     }]);
 
