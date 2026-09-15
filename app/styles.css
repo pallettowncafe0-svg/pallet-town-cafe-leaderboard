@@ -702,19 +702,22 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 
 /* V21.4 — final hero sizing: larger stats area and left-aligned labels. */
 .hero{min-height:210px;padding-top:42px;padding-bottom:42px;align-items:flex-start}
-.hero-stats{width:650px;max-width:55%;min-height:125px;display:grid;grid-template-columns:240px 175px 175px;gap:30px;align-items:start;text-align:left;padding-top:0}
-.hero-stat{width:100%;min-width:0;min-height:125px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;line-height:1.05;padding:0}
+.hero-stats{width:min(900px,62vw);max-width:none;min-height:150px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:46px;align-items:start;justify-content:center;text-align:left;padding-top:0;margin-left:auto;margin-right:auto}
+.hero-stat{width:100%;min-width:0;min-height:150px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;text-align:left;line-height:1.05;padding:0}
 .champion-stat{min-width:0}
-.champion-display{height:52px;display:flex;align-items:center;justify-content:flex-start;gap:12px}
-.hero-stats b{font-size:28px;color:var(--gold)}
-.hero-stat small,.champion-stat small{display:block;margin-top:9px;text-align:left;font-size:11px;line-height:1.2}
+.champion-display{height:62px;display:flex;align-items:center;justify-content:flex-start;gap:14px}
+.champion-display .avatar{width:52px;height:52px;flex-basis:52px}
+.hero-stats b{font-size:34px;color:var(--gold);line-height:1}
+.hero-stat small,.champion-stat small{display:block;margin-top:12px;text-align:left;font-size:12px;line-height:1.2}
 @media(max-width:1050px){
-  .hero-stats{width:560px;grid-template-columns:210px 145px 145px;gap:20px}
+  .hero-stats{width:min(760px,66vw);grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}
 }
 @media(max-width:850px){
   .hero{min-height:0;padding-top:35px;padding-bottom:28px}
-  .hero-stats{width:100%;max-width:none;grid-template-columns:1.4fr 1fr 1fr;gap:18px;min-height:80px;margin-top:25px}
-  .hero-stat{min-height:80px}
-  .hero-stats b{font-size:20px}
-  .champion-display{height:42px}
+  .hero-stats{width:100%;max-width:none;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;min-height:95px;margin-top:25px}
+  .hero-stat{min-height:95px}
+  .hero-stats b{font-size:22px}
+  .hero-stat small,.champion-stat small{font-size:10px}
+  .champion-display{height:46px;gap:8px}
+  .champion-display .avatar{width:40px;height:40px;flex-basis:40px}
 }
