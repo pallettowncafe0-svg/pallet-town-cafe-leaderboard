@@ -1283,7 +1283,7 @@ function Category({
 
       <h3>Battle Record</h3>
 
-      <div className="table">
+      <div className="table battle-record-table">
         <div className="row labels">
           <span>RANK</span>
           <span>PLAYER</span>

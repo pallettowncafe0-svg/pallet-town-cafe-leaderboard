@@ -651,3 +651,17 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .player-card-pokemon .pokemon-sprites.compact .pokemon-slot,
   .player-card-pokemon .pokemon-sprites.compact img{width:38px;height:38px}
 }
+
+/* Battle Record table only — keep all other table layouts unchanged. */
+.battle-record-table .row{grid-template-columns:80px minmax(240px,1fr) minmax(120px,1fr) 150px 100px;gap:10px;}
+.battle-record-table .row > span:nth-child(3){white-space:nowrap;}
+.battle-record-table .row > span:nth-child(4),
+.battle-record-table .row > span:nth-child(5){text-align:right;}
+.battle-record-table .labels span{white-space:normal;}
+@media(max-width:850px){
+  .battle-record-table .row{grid-template-columns:45px minmax(0,1fr) 76px;}
+  .battle-record-table .row span:nth-child(4),
+  .battle-record-table .row span:nth-child(5),
+  .battle-record-table .labels span:nth-child(4),
+  .battle-record-table .labels span:nth-child(5){display:none;}
+}
