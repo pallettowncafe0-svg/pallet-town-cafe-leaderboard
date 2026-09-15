@@ -1914,7 +1914,7 @@ if (type === "category-points") {
     );
   }
 
-  if(type==="category")return <div className="modal"><form onSubmit={e=>submit(e,"category.create")}><h2>Create Battle Category</h2><input name="name" required placeholder="Category name"/><textarea name="description" placeholder="Description"/><button className="button">Create Category</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
+  if(type==="category")return <div className="modal"><form key="create-category-form" onSubmit={e=>submit(e,"category.create")}><h2>Create Battle Category</h2><input name="name" required defaultValue="" placeholder="Category name"/><textarea name="description" defaultValue="" placeholder="Description"/><button className="button">Create Category</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 
 if(type==="edit-category") {
     const c=selected;
