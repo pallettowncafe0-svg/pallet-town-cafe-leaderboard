@@ -12,7 +12,9 @@ function text(value: unknown) {
 }
 
 function number(value: unknown) {
-  const parsed = Number(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const cleaned = text(value).replace(/,/g, "").replace(/%/g, "");
+  const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -22,7 +24,7 @@ function dateValue(value: unknown) {
   if (typeof value === "number") {
     const parsed = XLSX.SSF.parse_date_code(value);
     if (parsed) {
-      return new Date(
+      const result = new Date(
         parsed.y,
         parsed.m - 1,
         parsed.d,
@@ -30,62 +32,77 @@ function dateValue(value: unknown) {
         parsed.M || 0,
         parsed.S || 0
       );
+      if (!Number.isNaN(result.getTime())) return result;
     }
   }
 
-  if (value) {
-    const parsed = new Date(String(value));
+  const raw = text(value);
+  if (raw) {
+    const parsed = new Date(raw);
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
 
   return new Date();
 }
 
+function key(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function normalizedRow(row: Row) {
+  const result: Row = {};
+  for (const [name, value] of Object.entries(row)) result[key(name)] = value;
+  return result;
+}
+
 function getRowValue(row: Row, keys: string[]) {
-  for (const key of keys) {
-    const value = text(row[key]);
+  for (const candidate of keys) {
+    const value = text(row[key(candidate)]);
     if (value) return value;
   }
   return "";
 }
 
 function getChunkedValue(row: Row, prefix: string) {
-  const parts: string[] = [];
-  const direct = text(row[prefix]);
-  if (direct) parts.push(direct);
+  const normalizedPrefix = key(prefix);
+  const direct = text(row[normalizedPrefix]);
+  if (direct) return direct;
 
-  for (let index = 1; index <= 100; index += 1) {
-    const value = text(row[`${prefix} ${index}`]);
+  const parts: string[] = [];
+  for (let index = 1; index <= 200; index += 1) {
+    const value = text(row[key(`${prefix} ${index}`)]);
     if (!value) break;
     parts.push(value);
   }
-
   return parts.join("");
 }
 
 function getSheet(workbook: XLSX.WorkBook, names: string[]) {
-  const wanted = names.map((name) => name.toLowerCase().trim());
-  const actual = workbook.SheetNames.find((name) =>
-    wanted.includes(name.toLowerCase().trim())
-  );
+  const wanted = new Set(names.map(key));
+  const actual = workbook.SheetNames.find((name) => wanted.has(key(name)));
   if (!actual) return [] as Row[];
 
-  return XLSX.utils.sheet_to_json<Row>(workbook.Sheets[actual], {
-    defval: null,
-    raw: true,
-  });
+  return XLSX.utils
+    .sheet_to_json<Row>(workbook.Sheets[actual], {
+      defval: null,
+      raw: true,
+    })
+    .map(normalizedRow);
 }
 
 function pokemonList(row: Row) {
   const list: string[] = [];
 
   for (let index = 1; index <= 6; index += 1) {
-    const value = text(row[`Pokemon ${index}`]);
+    const value = getRowValue(row, [`Pokemon ${index}`]);
     if (!value) continue;
 
-    const shiny = text(row[`Shiny ${index}`]).toLowerCase();
+    const shiny = getRowValue(row, [`Shiny ${index}`]).toLowerCase();
     list.push(
-      shiny === "yes" || shiny === "true" || shiny === "shiny"
+      shiny === "yes" || shiny === "true" || shiny === "shiny" || shiny === "1"
         ? `${value}|shiny`
         : value
     );
@@ -93,7 +110,7 @@ function pokemonList(row: Row) {
 
   if (list.length) return list;
 
-  const legacy = text(row["Pokemon Set"]);
+  const legacy = getRowValue(row, ["Pokemon Set"]);
   return legacy
     ? legacy
         .split("|")
@@ -102,20 +119,27 @@ function pokemonList(row: Row) {
     : [];
 }
 
+function boolValue(value: unknown) {
+  const normalized = text(value).toLowerCase();
+  return normalized === "yes" || normalized === "true" || normalized === "1";
+}
+
 export async function POST(request: NextRequest) {
   try {
     await requireAdmin();
 
     const form = await request.formData();
     const file = form.get("file");
+    if (!(file instanceof File)) throw new Error("Choose an .xlsx backup file first.");
 
-    if (!(file instanceof File)) {
-      throw new Error("Choose an .xlsx backup file first.");
-    }
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (!bytes.length) throw new Error("The selected Excel file is empty.");
 
-    const workbook = XLSX.read(Buffer.from(await file.arrayBuffer()), {
+    const workbook = XLSX.read(bytes, {
       type: "buffer",
       cellDates: true,
+      cellNF: false,
+      cellText: true,
     });
 
     const lifetimeRows = getSheet(workbook, ["Lifetime Leaderboard"]);
@@ -124,11 +148,40 @@ export async function POST(request: NextRequest) {
     const matchRows = getSheet(workbook, ["Match History"]);
     const pokemonRows = getSheet(workbook, ["Pokemon Records"]);
     const highScoreRows = getSheet(workbook, ["PokéCompare High Scores", "PokeCompare High Scores"]);
-    const pokeCompareSettingsRows = getSheet(workbook, ["PokéCompare Settings", "PokeCompare Settings"]);
+    const settingsRows = getSheet(workbook, ["PokéCompare Settings", "PokeCompare Settings"]);
 
-    if (!lifetimeRows.length && !pointRows.length && !categoryRows.length && !matchRows.length && !pokemonRows.length && !highScoreRows.length && !pokeCompareSettingsRows.length) {
+    const supportedCount = [
+      lifetimeRows,
+      pointRows,
+      categoryRows,
+      matchRows,
+      pokemonRows,
+      highScoreRows,
+      settingsRows,
+    ].filter((rows) => rows.length > 0).length;
+
+    if (!supportedCount) {
       throw new Error(
-        `No supported backup sheets were found. Found: ${workbook.SheetNames.join(", ") || "none"}`
+        `No supported backup sheets were found. Found: ${workbook.SheetNames.join(", ") || "none"}.`
+      );
+    }
+
+    // Preflight the important rows BEFORE deleting anything from the database.
+    // This prevents a malformed workbook from wiping the live leaderboard.
+    const matchProblems: string[] = [];
+    for (let index = 0; index < matchRows.length; index += 1) {
+      const row = matchRows[index];
+      const category = getRowValue(row, ["Category", "Board", "Battle Board"]);
+      const winner = getRowValue(row, ["Winner", "Winner Name", "Winner Player", "Winner IGN"]);
+      const loser = getRowValue(row, ["Loser", "Loser Name", "Loser Player", "Loser IGN"]);
+      if (!category || !winner || !loser) {
+        matchProblems.push(`row ${index + 2}: missing category, winner, or loser`);
+      }
+    }
+
+    if (matchProblems.length === matchRows.length && matchRows.length > 0) {
+      throw new Error(
+        `The Match History sheet was found, but none of its rows contain the required Category, Winner, and Loser fields. First problem: ${matchProblems[0]}`
       );
     }
 
@@ -143,460 +196,395 @@ export async function POST(request: NextRequest) {
     let skippedMatches = 0;
     const skippedMatchReasons = new Set<string>();
 
-    // IMPORT IS A FULL REPLACEMENT.
-    // Keep site settings such as the logo/background, but replace all leaderboard data.
-    await db.pointTransaction.deleteMany({});
-    await db.match.deleteMany({});
-    await db.categoryRecord.deleteMany({});
-    await db.category.deleteMany({});
-    await db.player.deleteMany({});
-    await db.setting.upsert({
-      where: { key: "pokecompare_highscores" },
-      create: { key: "pokecompare_highscores", value: "[]" },
-      update: { value: "[]" },
-    });
-    await db.setting.deleteMany({ where: { key: "pokecompare_art" } });
-    await db.setting.upsert({
-      where: { key: "pokecompare_hide_details" },
-      create: { key: "pokecompare_hide_details", value: "false" },
-      update: { value: "false" },
-    });
+    await db.$transaction(
+      async (tx) => {
+        // FULL REPLACEMENT: leaderboard data is rebuilt from the workbook.
+        await tx.pointTransaction.deleteMany({});
+        await tx.match.deleteMany({});
+        await tx.categoryRecord.deleteMany({});
+        await tx.category.deleteMany({});
+        await tx.player.deleteMany({});
 
-    const players = await db.player.findMany();
-    const playerById = new Map(players.map((player) => [player.id, player]));
-    const playerByIgn = new Map<string, (typeof players)[number]>();
-    const playerByName = new Map<string, (typeof players)[number]>();
+        await tx.setting.upsert({
+          where: { key: "pokecompare_highscores" },
+          create: { key: "pokecompare_highscores", value: "[]" },
+          update: { value: "[]" },
+        });
+        await tx.setting.deleteMany({ where: { key: "pokecompare_art" } });
+        await tx.setting.upsert({
+          where: { key: "pokecompare_hide_details" },
+          create: { key: "pokecompare_hide_details", value: "false" },
+          update: { value: "false" },
+        });
 
-    for (const player of players) {
-      playerByName.set(player.name.toLowerCase(), player);
-      if (player.ign) playerByIgn.set(player.ign.toLowerCase(), player);
-    }
+        const players = await tx.player.findMany();
+        const playerById = new Map(players.map((player) => [player.id, player]));
+        const playerByIgn = new Map<string, (typeof players)[number]>();
+        const playerByName = new Map<string, (typeof players)[number]>();
 
-    const cachePlayer = (player: (typeof players)[number]) => {
-      playerById.set(player.id, player);
-      playerByName.set(player.name.toLowerCase(), player);
-      if (player.ign) playerByIgn.set(player.ign.toLowerCase(), player);
-    };
+        const cachePlayer = (player: (typeof players)[number]) => {
+          playerById.set(player.id, player);
+          playerByName.set(player.name.toLowerCase(), player);
+          if (player.ign) playerByIgn.set(player.ign.toLowerCase(), player);
+        };
 
-    const findPlayer = (value: string, ign = "") => {
-      if (ign) {
-        const byIgn = playerByIgn.get(ign.toLowerCase());
-        if (byIgn) return byIgn;
-      }
+        for (const player of players) cachePlayer(player);
 
-      if (!value) return undefined;
-      return (
-        playerById.get(value) ||
-        playerByIgn.get(value.toLowerCase()) ||
-        playerByName.get(value.toLowerCase())
-      );
-    };
+        const findPlayer = (value: string, ign = "") => {
+          if (ign) {
+            const byIgn = playerByIgn.get(ign.toLowerCase());
+            if (byIgn) return byIgn;
+          }
+          if (!value) return undefined;
+          return (
+            playerById.get(value) ||
+            playerByIgn.get(value.toLowerCase()) ||
+            playerByName.get(value.toLowerCase())
+          );
+        };
 
-    const getOrCreatePlayer = async (nameValue: string, ignValue = "") => {
-      const name = nameValue || ignValue;
-      const ign = ignValue || null;
-      if (!name) return undefined;
+        const getOrCreatePlayer = async (nameValue: string, ignValue = "") => {
+          const name = nameValue || ignValue;
+          const ign = ignValue || null;
+          if (!name) return undefined;
 
-      const existing = findPlayer(name, ignValue);
-      if (existing) return existing;
+          const existing = findPlayer(name, ignValue);
+          if (existing) return existing;
 
-      const created = await db.player.create({
-        data: {
-          name,
-          ign,
-          points: 0,
-          active: true,
-        },
-      });
+          const created = await tx.player.create({
+            data: { name, ign, points: 0, active: true },
+          });
+          cachePlayer(created);
+          playersAdded += 1;
+          return created;
+        };
 
-      cachePlayer(created);
-      playersAdded += 1;
-      return created;
-    };
+        // Create every referenced player first.
+        const playerSheets = [lifetimeRows, matchRows, pointRows, pokemonRows];
+        for (const rows of playerSheets) {
+          for (const row of rows) {
+            let name = "";
+            let ign = "";
+            if (rows === matchRows) {
+              name = getRowValue(row, ["Winner", "Winner Name", "Winner Player"]);
+              ign = getRowValue(row, ["Winner IGN"]);
+              await getOrCreatePlayer(name, ign);
+              name = getRowValue(row, ["Loser", "Loser Name", "Loser Player"]);
+              ign = getRowValue(row, ["Loser IGN"]);
+            } else {
+              name = getRowValue(row, ["Full Name", "Player", "Name"]);
+              ign = getRowValue(row, ["IGN", "In-Game Name"]);
+            }
+            await getOrCreatePlayer(name, ign);
+          }
+        }
 
-    // First pass: make sure every player referenced by any sheet exists.
-    for (const row of lifetimeRows) {
-      const name = getRowValue(row, ["Full Name", "Name", "Player"]);
-      const ign = getRowValue(row, ["IGN", "In-Game Name"]);
-      await getOrCreatePlayer(name, ign);
-    }
+        for (const row of lifetimeRows) {
+          const name = getRowValue(row, ["Full Name", "Name", "Player"]);
+          const ign = getRowValue(row, ["IGN", "In-Game Name"]);
+          const player = findPlayer(name, ign);
+          if (!player) continue;
 
-    for (const row of matchRows) {
-      const winnerName = getRowValue(row, ["Winner", "Winner Name"]);
-      const loserName = getRowValue(row, ["Loser", "Loser Name"]);
-      const winnerIgn = getRowValue(row, ["Winner IGN"]);
-      const loserIgn = getRowValue(row, ["Loser IGN"]);
-      await getOrCreatePlayer(winnerName, winnerIgn);
-      await getOrCreatePlayer(loserName, loserIgn);
-    }
-
-    for (const row of pointRows) {
-      const name = getRowValue(row, ["Player", "Full Name", "Name"]);
-      const ign = getRowValue(row, ["IGN"]);
-      await getOrCreatePlayer(name, ign);
-    }
-
-    for (const row of pokemonRows) {
-      const name = getRowValue(row, ["Player", "Full Name", "Name"]);
-      const ign = getRowValue(row, ["IGN"]);
-      await getOrCreatePlayer(name, ign);
-    }
-
-    // Lifetime leaderboard is the authoritative player snapshot from the backup.
-    for (const row of lifetimeRows) {
-      const name = getRowValue(row, ["Full Name", "Name", "Player"]);
-      const ign = getRowValue(row, ["IGN", "In-Game Name"]);
-      const player = findPlayer(name, ign);
-      if (!player) continue;
-
-      const updated = await db.player.update({
-        where: { id: player.id },
-        data: {
-          name: name || player.name,
-          ign: ign || null,
-          points: Math.trunc(number(row["Lifetime Points"])),
-          bestPerformance: getRowValue(row, ["Best Performance"]) || null,
-          image: getChunkedValue(row, "Profile Picture") || null,
-          active: true,
-        },
-      });
-
-      cachePlayer(updated);
-      playersUpdated += 1;
-    }
-
-    const categories = await db.category.findMany();
-    const categoryByName = new Map(
-      categories.map((category) => [category.name.toLowerCase(), category])
-    );
-
-    const ensureCategory = async (nameValue: string) => {
-      const name = nameValue.trim();
-      if (!name) return undefined;
-
-      const existing = categoryByName.get(name.toLowerCase());
-      if (existing) return existing;
-
-      const category = await db.category.create({ data: { name } });
-      categoryByName.set(name.toLowerCase(), category);
-      categoriesAdded += 1;
-      return category;
-    };
-
-    for (const row of categoryRows) {
-      await ensureCategory(getRowValue(row, ["Category", "Board"]));
-    }
-
-    // Import category W/L snapshots too. This means a backup still restores
-    // standings even when it was made before Match History existed.
-    for (const row of categoryRows) {
-      const category = await ensureCategory(getRowValue(row, ["Category", "Board"]));
-      const playerRef = getRowValue(row, ["Player", "Full Name", "Name"]);
-      const player = findPlayer(playerRef, getRowValue(row, ["IGN"]));
-      if (!category || !player) continue;
-
-      await db.categoryRecord.upsert({
-        where: {
-          categoryId_playerId: {
-            categoryId: category.id,
-            playerId: player.id,
-          },
-        },
-        create: {
-          categoryId: category.id,
-          playerId: player.id,
-          wins: Math.trunc(number(row["Wins"])),
-          losses: Math.trunc(number(row["Losses"])),
-        },
-        update: {
-          wins: Math.trunc(number(row["Wins"])),
-          losses: Math.trunc(number(row["Losses"])),
-        },
-      });
-      categoryRecordsImported += 1;
-    }
-
-    const categoriesWithImportedMatches = new Set<string>();
-
-    for (const row of matchRows) {
-      const categoryName = getRowValue(row, ["Category", "Board", "Battle Board"]);
-      const winnerRef = getRowValue(row, ["Winner", "Winner Name", "Winner Player"]);
-      const loserRef = getRowValue(row, ["Loser", "Loser Name", "Loser Player"]);
-      const winnerIgn = getRowValue(row, ["Winner IGN"]);
-      const loserIgn = getRowValue(row, ["Loser IGN"]);
-
-      if (!categoryName || !winnerRef || !loserRef) {
-        skippedMatches += 1;
-        skippedMatchReasons.add("missing category, winner, or loser");
-        continue;
-      }
-
-      if (winnerRef.toLowerCase() === loserRef.toLowerCase()) {
-        skippedMatches += 1;
-        skippedMatchReasons.add("winner and loser are the same player");
-        continue;
-      }
-
-      const category = await ensureCategory(categoryName);
-      const winner = findPlayer(winnerRef, winnerIgn) || (await getOrCreatePlayer(winnerRef, winnerIgn));
-      const loser = findPlayer(loserRef, loserIgn) || (await getOrCreatePlayer(loserRef, loserIgn));
-
-      if (!category || !winner || !loser) {
-        skippedMatches += 1;
-        skippedMatchReasons.add("winner or loser could not be resolved");
-        continue;
-      }
-
-      const playedAt = dateValue(
-        row["Date"] ?? row["Played At"] ?? row["Match Date"] ?? row["Timestamp"]
-      );
-      const notes = getRowValue(row, ["Notes", "Note"]) || null;
-      const backupId = getRowValue(row, ["Match ID", "ID"]);
-
-      if (backupId) {
-        const existingById = await db.match.findUnique({ where: { id: backupId } });
-        if (existingById) {
-          await db.match.update({
-            where: { id: backupId },
+          const updated = await tx.player.update({
+            where: { id: player.id },
             data: {
-              categoryId: category.id,
-              winnerId: winner.id,
-              loserId: loser.id,
-              notes,
-              playedAt,
+              name: name || player.name,
+              ign: ign || null,
+              points: Math.trunc(number(getRowValue(row, ["Lifetime Points", "Points"]))),
+              bestPerformance: getRowValue(row, ["Best Performance"]) || null,
+              image: getChunkedValue(row, "Profile Picture") || null,
+              active: true,
             },
           });
-          matchesUpdated += 1;
+          cachePlayer(updated);
+          playersUpdated += 1;
+        }
+
+        const categories = await tx.category.findMany();
+        const categoryByName = new Map(
+          categories.map((category) => [category.name.toLowerCase(), category])
+        );
+
+        const ensureCategory = async (nameValue: string) => {
+          const name = nameValue.trim();
+          if (!name) return undefined;
+          const existing = categoryByName.get(name.toLowerCase());
+          if (existing) return existing;
+
+          const category = await tx.category.create({ data: { name } });
+          categoryByName.set(name.toLowerCase(), category);
+          categoriesAdded += 1;
+          return category;
+        };
+
+        for (const row of categoryRows) {
+          await ensureCategory(getRowValue(row, ["Category", "Board"]));
+        }
+
+        for (const row of categoryRows) {
+          const category = await ensureCategory(getRowValue(row, ["Category", "Board"]));
+          const player = findPlayer(
+            getRowValue(row, ["Player", "Full Name", "Name"]),
+            getRowValue(row, ["IGN"])
+          );
+          if (!category || !player) continue;
+
+          await tx.categoryRecord.upsert({
+            where: {
+              categoryId_playerId: {
+                categoryId: category.id,
+                playerId: player.id,
+              },
+            },
+            create: {
+              categoryId: category.id,
+              playerId: player.id,
+              wins: Math.trunc(number(row[key("Wins")])),
+              losses: Math.trunc(number(row[key("Losses")])),
+            },
+            update: {
+              wins: Math.trunc(number(row[key("Wins")])),
+              losses: Math.trunc(number(row[key("Losses")])),
+            },
+          });
+          categoryRecordsImported += 1;
+        }
+
+        const categoriesWithImportedMatches = new Set<string>();
+
+        for (let index = 0; index < matchRows.length; index += 1) {
+          const row = matchRows[index];
+          const categoryName = getRowValue(row, ["Category", "Board", "Battle Board"]);
+          const winnerRef = getRowValue(row, ["Winner", "Winner Name", "Winner Player", "Winner IGN"]);
+          const loserRef = getRowValue(row, ["Loser", "Loser Name", "Loser Player", "Loser IGN"]);
+          const winnerIgn = getRowValue(row, ["Winner IGN"]);
+          const loserIgn = getRowValue(row, ["Loser IGN"]);
+
+          if (!categoryName || !winnerRef || !loserRef) {
+            skippedMatches += 1;
+            skippedMatchReasons.add(`row ${index + 2}: missing category, winner, or loser`);
+            continue;
+          }
+
+          if (winnerRef.toLowerCase() === loserRef.toLowerCase() && !winnerIgn && !loserIgn) {
+            skippedMatches += 1;
+            skippedMatchReasons.add(`row ${index + 2}: winner and loser are the same player`);
+            continue;
+          }
+
+          const category = await ensureCategory(categoryName);
+          const winner = findPlayer(winnerRef, winnerIgn) || (await getOrCreatePlayer(winnerRef, winnerIgn));
+          const loser = findPlayer(loserRef, loserIgn) || (await getOrCreatePlayer(loserRef, loserIgn));
+          if (!category || !winner || !loser || winner.id === loser.id) {
+            skippedMatches += 1;
+            skippedMatchReasons.add(`row ${index + 2}: winner or loser could not be resolved`);
+            continue;
+          }
+
+          const playedAt = dateValue(
+            row[key("Date")] ?? row[key("Played At")] ?? row[key("Match Date")] ?? row[key("Timestamp")]
+          );
+          const notes = getRowValue(row, ["Notes", "Note"]) || null;
+          const backupId = getRowValue(row, ["Match ID", "ID"]);
+
+          if (backupId) {
+            // The database was cleared, so an imported ID cannot collide. Keep it
+            // only when it is a valid non-empty string; Prisma will generate IDs otherwise.
+            try {
+              await tx.match.create({
+                data: {
+                  id: backupId,
+                  categoryId: category.id,
+                  winnerId: winner.id,
+                  loserId: loser.id,
+                  notes,
+                  playedAt,
+                },
+              });
+            } catch {
+              await tx.match.create({
+                data: {
+                  categoryId: category.id,
+                  winnerId: winner.id,
+                  loserId: loser.id,
+                  notes,
+                  playedAt,
+                },
+              });
+            }
+          } else {
+            await tx.match.create({
+              data: {
+                categoryId: category.id,
+                winnerId: winner.id,
+                loserId: loser.id,
+                notes,
+                playedAt,
+              },
+            });
+          }
+
+          matchesAdded += 1;
           categoriesWithImportedMatches.add(category.id);
-          continue;
         }
-      }
 
-      const start = new Date(playedAt.getTime() - 1000);
-      const end = new Date(playedAt.getTime() + 1000);
-      const duplicate = await db.match.findFirst({
-        where: {
-          categoryId: category.id,
-          winnerId: winner.id,
-          loserId: loser.id,
-          playedAt: { gte: start, lte: end },
-          notes,
-        },
-      });
+        for (const row of pointRows) {
+          const player = findPlayer(
+            getRowValue(row, ["Player", "Full Name", "Name"]),
+            getRowValue(row, ["IGN"])
+          );
+          if (!player) continue;
 
-      if (duplicate) {
-        categoriesWithImportedMatches.add(category.id);
-        continue;
-      }
+          const amount = Math.trunc(number(getRowValue(row, ["Points Change", "Amount"])));
+          if (!amount) continue;
 
-      await db.match.create({
-        data: {
-          categoryId: category.id,
-          winnerId: winner.id,
-          loserId: loser.id,
-          notes,
-          playedAt,
-        },
-      });
-      matchesAdded += 1;
-      categoriesWithImportedMatches.add(category.id);
-    }
+          const createdAt = dateValue(getRowValue(row, ["Date", "Created At", "Timestamp"]));
+          const reason = getRowValue(row, ["Reason"]) || null;
+          const action = getRowValue(row, ["Action"]) || "Imported transaction";
+          const actor = getRowValue(row, ["Admin", "Actor"]) || "Import";
+          const transactionId = getRowValue(row, ["Transaction ID"]);
+          const categoryName = getRowValue(row, ["Category"]);
+          const category = categoryName ? await ensureCategory(categoryName) : undefined;
 
-    for (const row of pointRows) {
-      const playerRef = getRowValue(row, ["Player", "Full Name", "Name"]);
-      const player = findPlayer(playerRef, getRowValue(row, ["IGN"]));
-      if (!player) continue;
-
-      const amount = Math.trunc(number(row["Points Change"]));
-      if (!amount) continue;
-
-      const createdAt = dateValue(row["Date"]);
-      const reason = getRowValue(row, ["Reason"]) || null;
-      const action = getRowValue(row, ["Action"]) || "Imported transaction";
-      const actor = getRowValue(row, ["Admin", "Actor"]) || "Import";
-      const transactionId = getRowValue(row, ["Transaction ID"]);
-
-      if (transactionId) {
-        const existingById = await db.pointTransaction.findUnique({
-          where: { id: transactionId },
-        });
-        if (existingById) continue;
-      }
-
-      const categoryName = getRowValue(row, ["Category"]);
-      const category = categoryName
-        ? await ensureCategory(categoryName)
-        : undefined;
-
-      const duplicate = await db.pointTransaction.findFirst({
-        where: {
-          playerId: player.id,
-          amount,
-          reason,
-          action,
-          createdAt: {
-            gte: new Date(createdAt.getTime() - 1000),
-            lte: new Date(createdAt.getTime() + 1000),
-          },
-        },
-      });
-
-      if (duplicate) continue;
-
-      await db.pointTransaction.create({
-        data: {
-          playerId: player.id,
-          categoryId: category?.id || null,
-          amount,
-          newTotal: Math.trunc(number(row["New Total"])),
-          reason,
-          action,
-          actor,
-          createdAt,
-        },
-      });
-      transactionsAdded += 1;
-    }
-
-    for (const row of pokemonRows) {
-      const board = getRowValue(row, ["Board", "Category"]);
-      const playerRef = getRowValue(row, ["Player", "Full Name", "Name"]);
-      const player = findPlayer(playerRef, getRowValue(row, ["IGN"]));
-      if (!board || !player) continue;
-
-      const pokemon = pokemonList(row).slice(0, 6);
-
-      if (board.toLowerCase() === "hall of fame" || board.toLowerCase() === "hall") {
-        await db.player.update({
-          where: { id: player.id },
-          data: { hallPokemon: JSON.stringify(pokemon) },
-        });
-      } else {
-        const category = await ensureCategory(board);
-        if (!category) continue;
-
-        const existing = await db.categoryRecord.findUnique({
-          where: {
-            categoryId_playerId: {
-              categoryId: category.id,
-              playerId: player.id,
-            },
-          },
-        });
-
-        if (existing) {
-          await db.categoryRecord.update({
-            where: { id: existing.id },
-            data: { pokemon: JSON.stringify(pokemon) },
-          });
-        } else {
-          await db.categoryRecord.create({
+          await tx.pointTransaction.create({
             data: {
-              categoryId: category.id,
+              ...(transactionId ? { id: transactionId } : {}),
               playerId: player.id,
-              pokemon: JSON.stringify(pokemon),
+              categoryId: category?.id || null,
+              amount,
+              newTotal: Math.trunc(number(getRowValue(row, ["New Total"]))),
+              reason,
+              action,
+              actor,
+              createdAt,
             },
           });
+          transactionsAdded += 1;
         }
-      }
 
-      pokemonUpdated += 1;
-    }
+        for (const row of pokemonRows) {
+          const board = getRowValue(row, ["Board", "Category"]);
+          const player = findPlayer(
+            getRowValue(row, ["Player", "Full Name", "Name"]),
+            getRowValue(row, ["IGN"])
+          );
+          if (!board || !player) continue;
 
-    // Match History is authoritative for categories that actually had matches
-    // in the imported backup. Other category leaderboard snapshots remain as imported.
-    for (const categoryId of categoriesWithImportedMatches) {
-      const matches = await db.match.findMany({ where: { categoryId } });
-      const records = await db.categoryRecord.findMany({
-        where: { categoryId },
-        select: { playerId: true, pokemon: true },
-      });
+          const pokemon = pokemonList(row).slice(0, 6);
+          if (key(board) === "halloffame" || key(board) === "hall") {
+            await tx.player.update({
+              where: { id: player.id },
+              data: { hallPokemon: JSON.stringify(pokemon) },
+            });
+          } else {
+            const category = await ensureCategory(board);
+            if (!category) continue;
+            await tx.categoryRecord.upsert({
+              where: {
+                categoryId_playerId: {
+                  categoryId: category.id,
+                  playerId: player.id,
+                },
+              },
+              create: {
+                categoryId: category.id,
+                playerId: player.id,
+                pokemon: JSON.stringify(pokemon),
+              },
+              update: { pokemon: JSON.stringify(pokemon) },
+            });
+          }
+          pokemonUpdated += 1;
+        }
 
-      const pokemonByPlayer = new Map(
-        records.map((record) => [record.playerId, record.pokemon])
-      );
-      const totals = new Map<string, { wins: number; losses: number }>();
+        // Match History is authoritative for W/L when matches exist.
+        for (const categoryId of categoriesWithImportedMatches) {
+          const matches = await tx.match.findMany({ where: { categoryId } });
+          const existingRecords = await tx.categoryRecord.findMany({
+            where: { categoryId },
+            select: { playerId: true, pokemon: true },
+          });
+          const pokemonByPlayer = new Map(existingRecords.map((r) => [r.playerId, r.pokemon]));
+          const totals = new Map<string, { wins: number; losses: number }>();
 
-      for (const match of matches) {
-        const winner = totals.get(match.winnerId) || { wins: 0, losses: 0 };
-        winner.wins += 1;
-        totals.set(match.winnerId, winner);
+          for (const match of matches) {
+            const winner = totals.get(match.winnerId) || { wins: 0, losses: 0 };
+            winner.wins += 1;
+            totals.set(match.winnerId, winner);
+            const loser = totals.get(match.loserId) || { wins: 0, losses: 0 };
+            loser.losses += 1;
+            totals.set(match.loserId, loser);
+          }
 
-        const loser = totals.get(match.loserId) || { wins: 0, losses: 0 };
-        loser.losses += 1;
-        totals.set(match.loserId, loser);
-      }
+          const playerIds = new Set([...totals.keys(), ...pokemonByPlayer.keys()]);
+          for (const playerId of playerIds) {
+            const record = totals.get(playerId) || { wins: 0, losses: 0 };
+            await tx.categoryRecord.upsert({
+              where: {
+                categoryId_playerId: { categoryId, playerId },
+              },
+              create: {
+                categoryId,
+                playerId,
+                wins: record.wins,
+                losses: record.losses,
+                pokemon: pokemonByPlayer.get(playerId) || null,
+              },
+              update: {
+                wins: record.wins,
+                losses: record.losses,
+                pokemon: pokemonByPlayer.get(playerId) || null,
+              },
+            });
+          }
+        }
 
-      const playerIds = new Set([...totals.keys(), ...pokemonByPlayer.keys()]);
+        const importedHighScores = highScoreRows
+          .map((row) => ({
+            score: Math.max(0, Math.trunc(number(getRowValue(row, ["Score"])))),
+            name: getRowValue(row, ["Name", "Player", "Initials"]).slice(0, 16),
+            note: getRowValue(row, ["Message", "Note"]).slice(0, 24),
+            createdAt: dateValue(getRowValue(row, ["Date", "Created At"])).toISOString(),
+          }))
+          .filter((entry) => entry.score > 0 && entry.name)
+          .sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt))
+          .slice(0, 10);
 
-      for (const playerId of playerIds) {
-        const record = totals.get(playerId) || { wins: 0, losses: 0 };
-        await db.categoryRecord.upsert({
-          where: {
-            categoryId_playerId: {
-              categoryId,
-              playerId,
-            },
-          },
-          create: {
-            categoryId,
-            playerId,
-            wins: record.wins,
-            losses: record.losses,
-            pokemon: pokemonByPlayer.get(playerId) || null,
-          },
-          update: {
-            wins: record.wins,
-            losses: record.losses,
-            pokemon: pokemonByPlayer.get(playerId) || null,
-          },
+        await tx.setting.upsert({
+          where: { key: "pokecompare_highscores" },
+          create: { key: "pokecompare_highscores", value: JSON.stringify(importedHighScores) },
+          update: { value: JSON.stringify(importedHighScores) },
         });
-      }
-    }
+
+        const settingsRow = settingsRows[0];
+        const importedArt = settingsRow
+          ? getChunkedValue(settingsRow, "Artwork") || getRowValue(settingsRow, ["Art", "Image"])
+          : "";
+        const importedHideDetails = settingsRow
+          ? getRowValue(settingsRow, ["Hide High Score Details", "Hide Names and Messages", "Hide High Scores"])
+          : "";
+        const hideHighScoreDetails = boolValue(importedHideDetails);
+
+        await tx.setting.upsert({
+          where: { key: "pokecompare_hide_details" },
+          create: { key: "pokecompare_hide_details", value: JSON.stringify(hideHighScoreDetails) },
+          update: { value: JSON.stringify(hideHighScoreDetails) },
+        });
+
+        if (importedArt && importedArt.startsWith("data:image/")) {
+          await tx.setting.upsert({
+            where: { key: "pokecompare_art" },
+            create: { key: "pokecompare_art", value: importedArt },
+            update: { value: importedArt },
+          });
+        }
+      },
+      { maxWait: 10000, timeout: 120000 },
+    );
 
     const skippedMessage = skippedMatches
       ? ` Skipped ${skippedMatches} match rows (${Array.from(skippedMatchReasons).join("; ")}).`
       : "";
-
-    const importedHighScores = highScoreRows
-      .map((row) => ({
-        score: Math.max(0, Math.trunc(number(row["Score"]))),
-        name: getRowValue(row, ["Name", "Player", "Initials"]).slice(0, 16),
-        note: getRowValue(row, ["Message", "Note"]).slice(0, 24),
-        createdAt: dateValue(row["Date"]).toISOString(),
-      }))
-      .filter((entry) => entry.score > 0 && entry.name)
-      .sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt))
-      .slice(0, 10);
-
-    await db.setting.upsert({
-      where: { key: "pokecompare_highscores" },
-      create: { key: "pokecompare_highscores", value: JSON.stringify(importedHighScores) },
-      update: { value: JSON.stringify(importedHighScores) },
-    });
-
-    const importedArt = pokeCompareSettingsRows.length
-      ? (getChunkedValue(pokeCompareSettingsRows[0], "Artwork") || getRowValue(pokeCompareSettingsRows[0], ["Art", "Image"]))
-      : "";
-
-    const importedHideDetails = pokeCompareSettingsRows.length
-      ? getRowValue(pokeCompareSettingsRows[0], ["Hide High Score Details", "Hide Names and Messages", "Hide High Scores"]).toLowerCase()
-      : "";
-
-    const hideHighScoreDetails = importedHideDetails === "yes" || importedHideDetails === "true" || importedHideDetails === "1";
-    await db.setting.upsert({
-      where: { key: "pokecompare_hide_details" },
-      create: { key: "pokecompare_hide_details", value: JSON.stringify(hideHighScoreDetails) },
-      update: { value: JSON.stringify(hideHighScoreDetails) },
-    });
-
-    if (importedArt && importedArt.startsWith("data:image/")) {
-      await db.setting.upsert({
-        where: { key: "pokecompare_art" },
-        create: { key: "pokecompare_art", value: importedArt },
-        update: { value: importedArt },
-      });
-    }
 
     return NextResponse.json({
       ok: true,
@@ -604,7 +592,7 @@ export async function POST(request: NextRequest) {
         `Import replaced the current data: ${matchesAdded} matches imported, ` +
         `${playersAdded} players added, ${playersUpdated} players updated, ` +
         `${transactionsAdded} point transactions added, ${categoryRecordsImported} category records imported, ` +
-        `${pokemonUpdated} Pokémon board sets updated, ${importedHighScores.length} PokéCompare high scores restored.${skippedMessage}`,
+        `${pokemonUpdated} Pokémon board sets updated.${skippedMessage}`,
       counts: {
         playersAdded,
         playersUpdated,
@@ -615,12 +603,18 @@ export async function POST(request: NextRequest) {
         categoryRecordsImported,
         pokemonUpdated,
         skippedMatches,
-        highScoresImported: importedHighScores.length,
+        highScoresImported: highScoreRows.length,
       },
     });
   } catch (error) {
+    console.error("[PTC IMPORT]", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Import failed" },
+      {
+        error:
+          error instanceof Error
+            ? `Import failed: ${error.message}`
+            : "Import failed.",
+      },
       { status: 400 }
     );
   }
