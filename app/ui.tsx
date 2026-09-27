@@ -1698,9 +1698,7 @@ function Modal({
         reader.readAsDataURL(file);
         return;
       }
-      if(p && !String(values.image||"").trim() && p.image?.startsWith("data:image/")) {
-        values.image=p.image;
-      }
+
       await api(p?"player.update":"player.create",values);
     }}><h2>{p?"Edit Player":"New Player"}</h2>{p&&<input type="hidden" name="id" value={p.id}/>}<input name="name" required defaultValue={p?.name} placeholder="Full name"/><input name="ign" defaultValue={p?.ign||""} placeholder="In-game name (optional)"/><input name="points" type="number" defaultValue={p?.points||0} placeholder="Starting points"/><label className="field-label">Display picture URL (optional)<input name="image" type="url" defaultValue={p?.image?.startsWith("data:image/")?"":(p?.image||"")} placeholder="Image URL"/></label><label className="field-label">Or upload a picture<input name="imageFile" type="file" accept="image/*"/></label><p className="muted">An uploaded picture replaces the URL. Maximum 2 MB.</p><input name="bestPerformance" defaultValue={p?.bestPerformance||""} placeholder="Best performance"/><textarea name="notes" defaultValue={p?.notes||""} placeholder="Private/admin notes"/><button className="button">Save Player</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>
   }
