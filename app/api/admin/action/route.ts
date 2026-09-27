@@ -81,7 +81,46 @@ function isAdminError(error: unknown) {
 export async function POST(request:NextRequest) {
  try { await requireAdmin(); const {action,payload={}}=await request.json();
    if(action==="player.create") { const player=await db.player.create({data:{name:payload.name,ign:payload.ign?.trim() || null,points:Number(payload.points)||0,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null}}); if(player.points) await db.pointTransaction.create({data:{playerId:player.id,amount:player.points,newTotal:player.points,reason:"Starting points",action:"Player created",actor:"Admin"}}); }
-   else if(action==="player.update") { const existing=await db.player.findUniqueOrThrow({where:{id:payload.id}}); const points=Number(payload.points); await db.player.update({where:{id:payload.id},data:{name:payload.name,ign:payload.ign?.trim() || null,bestPerformance:payload.bestPerformance||null,notes:payload.notes||null,image:payload.image||null,points}}); if(points!==existing.points) await db.pointTransaction.create({data:{playerId:payload.id,amount:points-existing.points,newTotal:points,reason:"Profile point correction",action:"Points edited",actor:"Admin"}}); }
+else if(action==="player.update") {
+  const existing =
+    await db.player.findUniqueOrThrow({
+      where: { id: payload.id },
+    });
+
+  const points = Number(payload.points);
+
+  const nextImage =
+    typeof payload.image === "string" &&
+    payload.image.trim()
+      ? payload.image
+      : existing.image;
+
+  await db.player.update({
+    where: { id: payload.id },
+    data: {
+      name: payload.name,
+      ign: payload.ign?.trim() || null,
+      bestPerformance:
+        payload.bestPerformance || null,
+      notes: payload.notes || null,
+      image: nextImage,
+      points,
+    },
+  });
+
+  if (points !== existing.points) {
+    await db.pointTransaction.create({
+      data: {
+        playerId: payload.id,
+        amount: points - existing.points,
+        newTotal: points,
+        reason: "Profile point correction",
+        action: "Points edited",
+        actor: "Admin",
+      },
+    });
+  }
+}
   else if(action==="player.delete") { await db.player.update({where:{id:payload.id},data:{active:false,ign:null}}); }
   else if(action==="points") { const player=await db.player.findUniqueOrThrow({where:{id:payload.playerId}}); const amount=Number(payload.amount); if(!Number.isInteger(amount)||amount===0) throw new Error("Enter a whole non-zero point amount"); const total=player.points+amount; await db.$transaction([db.player.update({where:{id:player.id},data:{points:total}}),db.pointTransaction.create({data:{playerId:player.id,amount,newTotal:total,reason:payload.reason||null,action:amount>0?"Points awarded":"Points removed",actor:"Admin"}})]); }
 else if(action==="category.points") {
