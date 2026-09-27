@@ -5,10 +5,41 @@ type Data={players:any[];categories:any[];history:any[];matches:any[];background
 const empty:Data={players:[],categories:[],history:[],matches:[],background:null,logo:null,isAdmin:false,pokeCompareHighScores:[],pokeCompareArt:null,pokeCompareHideDetails:false};
 const fmt=(value:string)=>new Date(value).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
 const initials=(player:any)=>String(player?.ign||player?.name||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase()||"?";
-function Avatar({player,className=""}:{player:any;className?:string}) {
- const [broken,setBroken]=useState(false);
- if(player?.image&&!broken) return <img className={`avatar ${className}`} src={player.image} alt={`${player.name||player.ign||"Player"} display picture`} style={{border:"0",outline:"none",boxShadow:"none",borderRadius:"50%",objectFit:"cover"}} onError={()=>setBroken(true)}/>;
- return <span className={`avatar avatar-fallback ${className}`} aria-label={`${player?.name||player?.ign||"Player"} initials`}>{initials(player)}</span>;
+function Avatar({
+  player,
+  className = "",
+}: {
+  player: any;
+  className?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+
+  if (player?.imageUrl && !broken) {
+    return (
+      <img
+        className={`avatar ${className}`}
+        src={player.imageUrl}
+        alt={`${player.name || player.ign || "Player"} display picture`}
+        style={{
+          border: "0",
+          outline: "none",
+          boxShadow: "none",
+          borderRadius: "50%",
+          objectFit: "cover",
+        }}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`avatar avatar-fallback ${className}`}
+      aria-label={`${player?.name || player?.ign || "Player"} initials`}
+    >
+      {initials(player)}
+    </span>
+  );
 }
 
 function parsePokemonValue(value:string) {
