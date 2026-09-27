@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { rankPlayers, rankRecords } from "@/lib/rankings";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const [
     rawPlayers,
@@ -17,28 +19,87 @@ export async function GET() {
     categoryTransactions,
   ] = await Promise.all([
     db.player.findMany({
-      where: { active: true },
+      where: {
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        ign: true,
+        points: true,
+        bestPerformance: true,
+        notes: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true,
+        image: true,
+        hallPokemon: true,
+      },
     }),
 
     db.category.findMany({
-      include: {
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        image: true,
+        createdAt: true,
         records: {
           where: {
             player: {
               active: true,
             },
           },
-          include: {
-            player: true,
+          select: {
+            id: true,
+            categoryId: true,
+            playerId: true,
+            wins: true,
+            losses: true,
+            pokemon: true,
+            player: {
+              select: {
+                id: true,
+                name: true,
+                ign: true,
+                points: true,
+                bestPerformance: true,
+                notes: true,
+                active: true,
+                createdAt: true,
+                updatedAt: true,
+                hallPokemon: true,
+              },
+            },
           },
         },
       },
     }),
 
     db.pointTransaction.findMany({
-      include: {
-        player: true,
-        category: true,
+      select: {
+        id: true,
+        playerId: true,
+        amount: true,
+        newTotal: true,
+        reason: true,
+        action: true,
+        actor: true,
+        createdAt: true,
+        categoryId: true,
+        player: {
+          select: {
+            id: true,
+            name: true,
+            ign: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -47,10 +108,33 @@ export async function GET() {
     }),
 
     db.match.findMany({
-      include: {
-        category: true,
-        winner: true,
-        loser: true,
+      select: {
+        id: true,
+        categoryId: true,
+        winnerId: true,
+        loserId: true,
+        notes: true,
+        playedAt: true,
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        winner: {
+          select: {
+            id: true,
+            name: true,
+            ign: true,
+          },
+        },
+        loser: {
+          select: {
+            id: true,
+            name: true,
+            ign: true,
+          },
+        },
       },
       orderBy: {
         playedAt: "desc",
@@ -62,11 +146,17 @@ export async function GET() {
       where: {
         key: "background",
       },
+      select: {
+        value: true,
+      },
     }),
 
     db.setting.findUnique({
       where: {
         key: "logo",
+      },
+      select: {
+        value: true,
       },
     }),
 
@@ -74,17 +164,26 @@ export async function GET() {
       where: {
         key: "pokecompare_highscores",
       },
+      select: {
+        value: true,
+      },
     }),
 
     db.setting.findUnique({
       where: {
         key: "pokecompare_art",
       },
+      select: {
+        value: true,
+      },
     }),
 
     db.setting.findUnique({
       where: {
         key: "pokecompare_hide_details",
+      },
+      select: {
+        value: true,
       },
     }),
 
@@ -94,115 +193,192 @@ export async function GET() {
           not: null,
         },
       },
+      select: {
+        categoryId: true,
+        playerId: true,
+        amount: true,
+      },
     }),
   ]);
 
-  const players = rankPlayers(rawPlayers).map((player: any, index) => ({
-    ...player,
-    hallPokemon: player.hallPokemon
-      ? JSON.parse(player.hallPokemon)
-      : [],
-    rank: index + 1,
-  }));
+  const players = rankPlayers(rawPlayers).map(
+    (player: any, index) => ({
+      ...player,
+      hallPokemon: player.hallPokemon
+        ? JSON.parse(player.hallPokemon)
+        : [],
+      rank: index + 1,
+    })
+  );
 
-  const categories = rawCategories.map((category: any) => {
-    const pointTotals = categoryTransactions
-      .filter(
-        (transaction: any) => transaction.categoryId === category.id
-      )
-      .reduce((totals: Map<string, number>, transaction: any) => {
-        totals.set(
-          transaction.playerId,
-          (totals.get(transaction.playerId) || 0) + transaction.amount
-        );
-
-        return totals;
-      }, new Map<string, number>());
-
-    const pointLeaderboard = Array.from(pointTotals.entries())
-      .map(([playerId, points]) => {
-        const player = rawPlayers.find(
-          (item: any) => item.id === playerId
-        );
-
-        return player
-          ? {
-              player,
-              playerId,
-              points,
-            }
-          : null;
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => b.points - a.points)
-      .map((entry: any, index) => ({
-        ...entry,
-        rank: index + 1,
-      }));
-
-    const records = rankRecords(category.records).map(
-      (record: any, index: number) => {
-        const categoryPoints = categoryTransactions
+  const categories = rawCategories.map(
+    (category: any) => {
+      const pointTotals =
+        categoryTransactions
           .filter(
             (transaction: any) =>
-              transaction.categoryId === category.id &&
-              transaction.playerId === record.playerId
+              transaction.categoryId === category.id
           )
           .reduce(
-            (total: number, transaction: any) =>
-              total + transaction.amount,
-            0
+            (
+              totals: Map<string, number>,
+              transaction: any
+            ) => {
+              totals.set(
+                transaction.playerId,
+                (totals.get(transaction.playerId) || 0) +
+                  transaction.amount
+              );
+
+              return totals;
+            },
+            new Map<string, number>()
           );
 
-        return {
-          ...record,
-          rank: index + 1,
-          winRate:
-            record.wins + record.losses
-              ? Math.round(
-                  (record.wins / (record.wins + record.losses)) * 100
-                )
-              : 0,
-          pokemon: record.pokemon
-            ? JSON.parse(record.pokemon)
-            : [],
-          categoryPoints,
-        };
-      }
-    );
+      const pointLeaderboard =
+        Array.from(
+          pointTotals.entries()
+        )
+          .map(
+            ([playerId, points]) => {
+              const player =
+                rawPlayers.find(
+                  (item: any) =>
+                    item.id === playerId
+                );
 
-    return {
-      ...category,
-      records,
-      pointLeaderboard,
-    };
-  });
+              return player
+                ? {
+                    player,
+                    playerId,
+                    points,
+                  }
+                : null;
+            }
+          )
+          .filter(Boolean)
+          .sort(
+            (a: any, b: any) =>
+              b.points - a.points
+          )
+          .map(
+            (entry: any, index) => ({
+              ...entry,
+              rank: index + 1,
+            })
+          );
+
+      const records =
+        rankRecords(
+          category.records
+        ).map(
+          (record: any, index: number) => {
+            const categoryPoints =
+              categoryTransactions
+                .filter(
+                  (transaction: any) =>
+                    transaction.categoryId ===
+                      category.id &&
+                    transaction.playerId ===
+                      record.playerId
+                )
+                .reduce(
+                  (
+                    total: number,
+                    transaction: any
+                  ) =>
+                    total +
+                    transaction.amount,
+                  0
+                );
+
+            return {
+              ...record,
+              rank: index + 1,
+              winRate:
+                record.wins +
+                  record.losses
+                  ? Math.round(
+                      (record.wins /
+                        (record.wins +
+                          record.losses)) *
+                        100
+                    )
+                  : 0,
+              pokemon: record.pokemon
+                ? JSON.parse(
+                    record.pokemon
+                  )
+                : [],
+              categoryPoints,
+            };
+          }
+        );
+
+      return {
+        ...category,
+        records,
+        pointLeaderboard,
+      };
+    }
+  );
 
   let parsedHighScores: any[] = [];
+
   if (pokeCompareHighScores?.value) {
     try {
-      const value = JSON.parse(pokeCompareHighScores.value);
-      parsedHighScores = Array.isArray(value) ? value.slice(0, 10) : [];
+      const value =
+        JSON.parse(
+          pokeCompareHighScores.value
+        );
+
+      parsedHighScores =
+        Array.isArray(value)
+          ? value.slice(0, 10)
+          : [];
     } catch {
       parsedHighScores = [];
     }
   }
 
   let hideHighScoreDetails = false;
+
   if (pokeComparePrivacy?.value) {
-    try { hideHighScoreDetails = JSON.parse(pokeComparePrivacy.value) === true; } catch { hideHighScoreDetails = pokeComparePrivacy.value === "true"; }
+    try {
+      hideHighScoreDetails =
+        JSON.parse(
+          pokeComparePrivacy.value
+        ) === true;
+    } catch {
+      hideHighScoreDetails =
+        pokeComparePrivacy.value ===
+        "true";
+    }
   }
 
-  return NextResponse.json({
-    players,
-    categories,
-    history,
-    matches,
-    background: background?.value || null,
-    logo: logo?.value || null,
-    pokeCompareHighScores: parsedHighScores,
-    pokeCompareArt: pokeCompareArt?.value || null,
-    pokeCompareHideDetails: hideHighScoreDetails,
-    isAdmin: await isAdmin(),
-  });
+  return NextResponse.json(
+    {
+      players,
+      categories,
+      history,
+      matches,
+      background:
+        background?.value || null,
+      logo:
+        logo?.value || null,
+      pokeCompareHighScores:
+        parsedHighScores,
+      pokeCompareArt:
+        pokeCompareArt?.value || null,
+      pokeCompareHideDetails:
+        hideHighScoreDetails,
+      isAdmin: await isAdmin(),
+    },
+    {
+      headers: {
+        "Cache-Control":
+          "private, max-age=30, stale-while-revalidate=60",
+      },
+    }
+  );
 }
