@@ -2,8 +2,19 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { rankPlayers, rankRecords } from "@/lib/rankings";
+import crypto from "crypto";
 
-export const runtime = "nodejs";
+function mediaUrl(path: string, value: string | null | undefined) {
+  if (!value) return null;
+
+  const hash = crypto
+    .createHash("sha1")
+    .update(value)
+    .digest("hex")
+    .slice(0, 12);
+
+  return `${path}?v=${hash}`;
+}
 
 export async function GET() {
   const [
@@ -19,87 +30,28 @@ export async function GET() {
     categoryTransactions,
   ] = await Promise.all([
     db.player.findMany({
-      where: {
-        active: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        ign: true,
-        points: true,
-        bestPerformance: true,
-        notes: true,
-        active: true,
-        createdAt: true,
-        updatedAt: true,
-        image: true,
-        hallPokemon: true,
-      },
+      where: { active: true },
     }),
 
     db.category.findMany({
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        image: true,
-        createdAt: true,
+      include: {
         records: {
           where: {
             player: {
               active: true,
             },
           },
-          select: {
-            id: true,
-            categoryId: true,
-            playerId: true,
-            wins: true,
-            losses: true,
-            pokemon: true,
-            player: {
-              select: {
-                id: true,
-                name: true,
-                ign: true,
-                points: true,
-                bestPerformance: true,
-                notes: true,
-                active: true,
-                createdAt: true,
-                updatedAt: true,
-                hallPokemon: true,
-              },
-            },
+          include: {
+            player: true,
           },
         },
       },
     }),
 
     db.pointTransaction.findMany({
-      select: {
-        id: true,
-        playerId: true,
-        amount: true,
-        newTotal: true,
-        reason: true,
-        action: true,
-        actor: true,
-        createdAt: true,
-        categoryId: true,
-        player: {
-          select: {
-            id: true,
-            name: true,
-            ign: true,
-          },
-        },
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+      include: {
+        player: true,
+        category: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -108,33 +60,10 @@ export async function GET() {
     }),
 
     db.match.findMany({
-      select: {
-        id: true,
-        categoryId: true,
-        winnerId: true,
-        loserId: true,
-        notes: true,
-        playedAt: true,
-        category: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        winner: {
-          select: {
-            id: true,
-            name: true,
-            ign: true,
-          },
-        },
-        loser: {
-          select: {
-            id: true,
-            name: true,
-            ign: true,
-          },
-        },
+      include: {
+        category: true,
+        winner: true,
+        loser: true,
       },
       orderBy: {
         playedAt: "desc",
@@ -146,17 +75,11 @@ export async function GET() {
       where: {
         key: "background",
       },
-      select: {
-        value: true,
-      },
     }),
 
     db.setting.findUnique({
       where: {
         key: "logo",
-      },
-      select: {
-        value: true,
       },
     }),
 
@@ -164,26 +87,17 @@ export async function GET() {
       where: {
         key: "pokecompare_highscores",
       },
-      select: {
-        value: true,
-      },
     }),
 
     db.setting.findUnique({
       where: {
         key: "pokecompare_art",
       },
-      select: {
-        value: true,
-      },
     }),
 
     db.setting.findUnique({
       where: {
         key: "pokecompare_hide_details",
-      },
-      select: {
-        value: true,
       },
     }),
 
@@ -193,149 +107,164 @@ export async function GET() {
           not: null,
         },
       },
-      select: {
-        categoryId: true,
-        playerId: true,
-        amount: true,
-      },
     }),
   ]);
 
   const players = rankPlayers(rawPlayers).map(
-    (player: any, index) => ({
+    (player: any, index: number) => ({
       ...player,
+
+      /*
+       * Do NOT send the large base64 PFP through /api/data.
+       * The actual image is served separately by /api/media.
+       */
+      image: undefined,
+
+      imageUrl: player.image
+        ? mediaUrl(`/api/media?type=player&id=${player.id}`, player.image)
+        : null,
+
       hallPokemon: player.hallPokemon
         ? JSON.parse(player.hallPokemon)
         : [],
+
       rank: index + 1,
     })
   );
 
-  const categories = rawCategories.map(
-    (category: any) => {
-      const pointTotals =
-        categoryTransactions
-          .filter(
-            (transaction: any) =>
-              transaction.categoryId === category.id
-          )
-          .reduce(
-            (
-              totals: Map<string, number>,
-              transaction: any
-            ) => {
-              totals.set(
-                transaction.playerId,
-                (totals.get(transaction.playerId) || 0) +
-                  transaction.amount
-              );
-
-              return totals;
-            },
-            new Map<string, number>()
+  const categories = rawCategories.map((category: any) => {
+    const pointTotals = categoryTransactions
+      .filter(
+        (transaction: any) =>
+          transaction.categoryId === category.id
+      )
+      .reduce(
+        (totals: Map<string, number>, transaction: any) => {
+          totals.set(
+            transaction.playerId,
+            (totals.get(transaction.playerId) || 0) +
+              transaction.amount
           );
 
-      const pointLeaderboard =
-        Array.from(
-          pointTotals.entries()
-        )
-          .map(
-            ([playerId, points]) => {
-              const player =
-                rawPlayers.find(
-                  (item: any) =>
-                    item.id === playerId
-                );
+          return totals;
+        },
+        new Map<string, number>()
+      );
 
-              return player
-                ? {
-                    player,
-                    playerId,
-                    points,
-                  }
-                : null;
-            }
-          )
-          .filter(Boolean)
-          .sort(
-            (a: any, b: any) =>
-              b.points - a.points
-          )
-          .map(
-            (entry: any, index) => ({
-              ...entry,
-              rank: index + 1,
-            })
-          );
-
-      const records =
-        rankRecords(
-          category.records
-        ).map(
-          (record: any, index: number) => {
-            const categoryPoints =
-              categoryTransactions
-                .filter(
-                  (transaction: any) =>
-                    transaction.categoryId ===
-                      category.id &&
-                    transaction.playerId ===
-                      record.playerId
-                )
-                .reduce(
-                  (
-                    total: number,
-                    transaction: any
-                  ) =>
-                    total +
-                    transaction.amount,
-                  0
-                );
-
-            return {
-              ...record,
-              rank: index + 1,
-              winRate:
-                record.wins +
-                  record.losses
-                  ? Math.round(
-                      (record.wins /
-                        (record.wins +
-                          record.losses)) *
-                        100
-                    )
-                  : 0,
-              pokemon: record.pokemon
-                ? JSON.parse(
-                    record.pokemon
-                  )
-                : [],
-              categoryPoints,
-            };
-          }
+    const pointLeaderboard = Array.from(pointTotals.entries())
+      .map(([playerId, points]) => {
+        const player = rawPlayers.find(
+          (item: any) => item.id === playerId
         );
 
-      return {
-        ...category,
-        records,
-        pointLeaderboard,
-      };
-    }
-  );
+        if (!player) return null;
+
+        return {
+          player: {
+            ...player,
+            image: undefined,
+            imageUrl: player.image
+              ? mediaUrl(
+                  `/api/media?type=player&id=${player.id}`,
+                  player.image
+                )
+              : null,
+          },
+          playerId,
+          points,
+        };
+      })
+      .filter(Boolean)
+      .sort(
+        (a: any, b: any) =>
+          b.points - a.points
+      )
+      .map((entry: any, index: number) => ({
+        ...entry,
+        rank: index + 1,
+      }));
+
+    const records = rankRecords(category.records).map(
+      (record: any, index: number) => {
+        const categoryPoints = categoryTransactions
+          .filter(
+            (transaction: any) =>
+              transaction.categoryId === category.id &&
+              transaction.playerId === record.playerId
+          )
+          .reduce(
+            (total: number, transaction: any) =>
+              total + transaction.amount,
+            0
+          );
+
+        const recordPlayer = record.player
+          ? {
+              ...record.player,
+              image: undefined,
+              imageUrl: record.player.image
+                ? mediaUrl(
+                    `/api/media?type=player&id=${record.player.id}`,
+                    record.player.image
+                  )
+                : null,
+            }
+          : record.player;
+
+        return {
+          ...record,
+          player: recordPlayer,
+
+          rank: index + 1,
+
+          winRate:
+            record.wins + record.losses
+              ? Math.round(
+                  (record.wins /
+                    (record.wins + record.losses)) *
+                    100
+                )
+              : 0,
+
+          pokemon: record.pokemon
+            ? JSON.parse(record.pokemon)
+            : [],
+
+          categoryPoints,
+        };
+      }
+    );
+
+    return {
+      ...category,
+
+      /*
+       * Board images can also be large.
+       * Serve them through /api/media instead.
+       */
+      image: category.image
+        ? mediaUrl(
+            `/api/media?type=category&id=${category.id}`,
+            category.image
+          )
+        : null,
+
+      records,
+      pointLeaderboard,
+    };
+  });
 
   let parsedHighScores: any[] = [];
 
   if (pokeCompareHighScores?.value) {
     try {
-      const value =
-        JSON.parse(
-          pokeCompareHighScores.value
-        );
+      const value = JSON.parse(
+        pokeCompareHighScores.value
+      );
 
-      parsedHighScores =
-        Array.isArray(value)
-          ? value.slice(0, 10)
-          : [];
+      parsedHighScores = Array.isArray(value)
+        ? value.slice(0, 10)
+        : [];
     } catch {
       parsedHighScores = [];
     }
@@ -346,39 +275,56 @@ export async function GET() {
   if (pokeComparePrivacy?.value) {
     try {
       hideHighScoreDetails =
-        JSON.parse(
-          pokeComparePrivacy.value
-        ) === true;
+        JSON.parse(pokeComparePrivacy.value) === true;
     } catch {
       hideHighScoreDetails =
-        pokeComparePrivacy.value ===
-        "true";
+        pokeComparePrivacy.value === "true";
     }
   }
 
-  return NextResponse.json(
-    {
-      players,
-      categories,
-      history,
-      matches,
-      background:
-        background?.value || null,
-      logo:
-        logo?.value || null,
-      pokeCompareHighScores:
-        parsedHighScores,
-      pokeCompareArt:
-        pokeCompareArt?.value || null,
-      pokeCompareHideDetails:
-        hideHighScoreDetails,
-      isAdmin: await isAdmin(),
-    },
-    {
-      headers: {
-        "Cache-Control":
-          "private, max-age=30, stale-while-revalidate=60",
-      },
-    }
+  const response = NextResponse.json({
+    players,
+    categories,
+    history,
+    matches,
+
+    background: background?.value
+      ? mediaUrl(
+          "/api/media?type=setting&key=background",
+          background.value
+        )
+      : null,
+
+    logo: logo?.value
+      ? mediaUrl(
+          "/api/media?type=setting&key=logo",
+          logo.value
+        )
+      : null,
+
+    pokeCompareHighScores: parsedHighScores,
+
+    pokeCompareArt: pokeCompareArt?.value
+      ? mediaUrl(
+          "/api/media?type=setting&key=pokecompare_art",
+          pokeCompareArt.value
+        )
+      : null,
+
+    pokeCompareHideDetails:
+      hideHighScoreDetails,
+
+    isAdmin: await isAdmin(),
+  });
+
+  /*
+   * Keep the main JSON response uncached for now.
+   * It is now small because images are no longer embedded.
+   */
+  response.headers.set(
+    "Cache-Control",
+    "no-store"
   );
+
+  return response;
 }
