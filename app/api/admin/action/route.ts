@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { editedImage } from "@/lib/media";
 const date = (value?:string) => value ? new Date(value) : new Date();
 
 async function recalculateCategory(categoryId: string, tx: any) {
@@ -89,11 +90,7 @@ else if(action==="player.update") {
 
   const points = Number(payload.points);
 
-  const nextImage =
-    typeof payload.image === "string" &&
-    payload.image.trim()
-      ? payload.image
-      : existing.image;
+  const nextImage = editedImage(payload.image, existing.image);
 
   await db.player.update({
     where: { id: payload.id },
@@ -206,7 +203,10 @@ else if(action==="category.points") {
     });
   }
   else if(action==="category.create") await db.category.create({data:{name:payload.name,description:payload.description||null,image:payload.image||null}});
-  else if(action==="category.update") await db.category.update({where:{id:payload.id},data:{name:payload.name,description:payload.description||null,image:payload.image||null}});
+  else if(action==="category.update") {
+    const existing = await db.category.findUniqueOrThrow({where:{id:payload.id}});
+    await db.category.update({where:{id:payload.id},data:{name:payload.name,description:payload.description||null,image:editedImage(payload.image, existing.image)}});
+  }
   else if(action==="category.duplicate") {
     const source=await db.category.findUniqueOrThrow({where:{id:payload.id}});
     const name=String(payload.name||`${source.name} Copy`).trim();

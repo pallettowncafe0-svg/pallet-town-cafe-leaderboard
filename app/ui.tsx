@@ -13,6 +13,7 @@ function Avatar({
   className?: string;
 }) {
   const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [player?.imageUrl]);
 
   if (player?.imageUrl && !broken) {
     return (
@@ -1954,7 +1955,7 @@ if(type==="edit-category") {
       const values:any=Object.fromEntries(new FormData(form));
       const fileInput=form.elements.namedItem("imageFile") as HTMLInputElement;
       const file=fileInput?.files?.[0];
-      const save=(image:any)=>api("category.update",{...values,id:c.id,image:image ?? null});
+      const save=(image:any)=>api("category.update",{...values,id:c.id,image});
       if(file){
         if(file.size>2*1024*1024){alert("Board image must be 2 MB or smaller.");return;}
         const reader=new FileReader();
@@ -1962,16 +1963,16 @@ if(type==="edit-category") {
         reader.readAsDataURL(file);
       } else {
         const typedUrl=String(values.image||"").trim();
-        await save(typedUrl || (c.image || null));
+        await save(typedUrl || undefined);
       }
     }}>
       <h2>Edit Battle Board</h2>
       <input name="name" required defaultValue={c.name||""} placeholder="Board name"/>
       <textarea name="description" placeholder="Description" defaultValue={c.description||""}/>
       <label className="field-label">Board image URL (optional)
-        <input name="image" type="url" defaultValue={c.image?.startsWith("data:image/")?"":(c.image||"")} placeholder="Image URL"/>
+        <input name="image" type="url" defaultValue={c.image?.startsWith("/api/media?")?"":(c.image||"")} placeholder="Image URL"/>
       </label>
-      {c.image?.startsWith("data:image/") && <p className="muted">Current uploaded board image will be kept unless you upload a new image.</p>}
+      {c.image?.startsWith("/api/media?") && <p className="muted">Current uploaded board image will be kept unless you upload a new image.</p>}
       <label className="field-label">Or upload a board image
         <input name="imageFile" type="file" accept="image/*"/>
       </label>
