@@ -34,3 +34,14 @@ The admin password is verified server-side and an httpOnly, signed, expiring coo
 
 Battle matches are the source of truth for category standings: creating, editing, moving, or deleting a match rebuilds the affected category records from the remaining match history. Player images are optional URLs with initials/IGN fallbacks when absent or unavailable.
 
+
+## Oracle production migration
+
+See [deploy/oracle/README.md](deploy/oracle/README.md) for VM, secure environment,
+Nginx/HTTPS, systemd, deployment, rollback and verification steps. Production uses
+the existing Supabase database; do **not** run the development `db:push` instructions
+above against it. Use the committed lockfile with `npm ci`.
+
+Run `npm run test:media` for route regressions and an Excel export/import round-trip
+with isolated in-memory database delegates. These do not access production and do
+not replace real PostgreSQL/browser acceptance tests.

@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "serve": "next start -H 0.0.0.0",
     "db:push": "prisma db push",
-    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
+    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
+    "test:media": "node --import tsx tests/media-regression.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -25,5 +26,8 @@
     "prisma": "^6.19.3",
     "tsx": "^4.19.3",
     "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22 <25"
   }
 }

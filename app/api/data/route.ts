@@ -2,19 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { isAdmin } from "@/lib/auth";
 import { rankPlayers, rankRecords } from "@/lib/rankings";
-import crypto from "crypto";
-
-function mediaUrl(path: string, value: string | null | undefined) {
-  if (!value) return null;
-
-  const hash = crypto
-    .createHash("sha1")
-    .update(value)
-    .digest("hex")
-    .slice(0, 12);
-
-  return `${path}?v=${hash}`;
-}
+import { getMediaMetadata, metadataMediaUrl, playerSelect, categorySelect } from "@/lib/leaderboard-data";
 
 export async function GET() {
   const [
@@ -22,19 +10,19 @@ export async function GET() {
     rawCategories,
     history,
     matches,
-    background,
-    logo,
     pokeCompareHighScores,
-    pokeCompareArt,
     pokeComparePrivacy,
     categoryTransactions,
+    mediaMetadata,
   ] = await Promise.all([
     db.player.findMany({
       where: { active: true },
+      select: playerSelect,
     }),
 
     db.category.findMany({
-      include: {
+      select: {
+        ...categorySelect,
         records: {
           where: {
             player: {
@@ -42,7 +30,7 @@ export async function GET() {
             },
           },
           include: {
-            player: true,
+            player: { select: playerSelect },
           },
         },
       },
@@ -50,8 +38,8 @@ export async function GET() {
 
     db.pointTransaction.findMany({
       include: {
-        player: true,
-        category: true,
+        player: { select: playerSelect },
+        category: { select: categorySelect },
       },
       orderBy: {
         createdAt: "desc",
@@ -61,9 +49,9 @@ export async function GET() {
 
     db.match.findMany({
       include: {
-        category: true,
-        winner: true,
-        loser: true,
+        category: { select: categorySelect },
+        winner: { select: playerSelect },
+        loser: { select: playerSelect },
       },
       orderBy: {
         playedAt: "desc",
@@ -71,27 +59,10 @@ export async function GET() {
       take: 100,
     }),
 
-    db.setting.findUnique({
-      where: {
-        key: "background",
-      },
-    }),
-
-    db.setting.findUnique({
-      where: {
-        key: "logo",
-      },
-    }),
 
     db.setting.findUnique({
       where: {
         key: "pokecompare_highscores",
-      },
-    }),
-
-    db.setting.findUnique({
-      where: {
-        key: "pokecompare_art",
       },
     }),
 
@@ -102,27 +73,28 @@ export async function GET() {
     }),
 
     db.pointTransaction.findMany({
+      select: { categoryId: true, playerId: true, amount: true },
       where: {
         categoryId: {
           not: null,
         },
       },
     }),
+    getMediaMetadata(),
   ]);
+
+  const mediaByKey = new Map(mediaMetadata.map(item => [`${item.type}:${item.id}`, item]));
+  const imageURL = (type: string, id: string) => metadataMediaUrl(mediaByKey.get(`${type}:${id}`));
+  const publicPlayer = (player: any) => ({
+    ...player,
+    image: mediaByKey.get(`player:${player.id}`)?.url || undefined,
+    imageUrl: imageURL("player", player.id),
+  });
+  const publicCategory = (category: any) => ({ ...category, image: imageURL("category", category.id) });
 
   const players = rankPlayers(rawPlayers).map(
     (player: any, index: number) => ({
-      ...player,
-
-      /*
-       * Do NOT send the large base64 PFP through /api/data.
-       * The actual image is served separately by /api/media.
-       */
-      image: undefined,
-
-      imageUrl: player.image
-        ? mediaUrl(`/api/media?type=player&id=${player.id}`, player.image)
-        : null,
+      ...publicPlayer(player),
 
       hallPokemon: player.hallPokemon
         ? JSON.parse(player.hallPokemon)
@@ -160,16 +132,7 @@ export async function GET() {
         if (!player) return null;
 
         return {
-          player: {
-            ...player,
-            image: undefined,
-            imageUrl: player.image
-              ? mediaUrl(
-                  `/api/media?type=player&id=${player.id}`,
-                  player.image
-                )
-              : null,
-          },
+          player: publicPlayer(player),
           playerId,
           points,
         };
@@ -198,18 +161,7 @@ export async function GET() {
             0
           );
 
-        const recordPlayer = record.player
-          ? {
-              ...record.player,
-              image: undefined,
-              imageUrl: record.player.image
-                ? mediaUrl(
-                    `/api/media?type=player&id=${record.player.id}`,
-                    record.player.image
-                  )
-                : null,
-            }
-          : record.player;
+        const recordPlayer = record.player ? publicPlayer(record.player) : record.player;
 
         return {
           ...record,
@@ -242,12 +194,7 @@ export async function GET() {
        * Board images can also be large.
        * Serve them through /api/media instead.
        */
-      image: category.image
-        ? mediaUrl(
-            `/api/media?type=category&id=${category.id}`,
-            category.image
-          )
-        : null,
+      image: imageURL("category", category.id),
 
       records,
       pointLeaderboard,
@@ -285,31 +232,24 @@ export async function GET() {
   const response = NextResponse.json({
     players,
     categories,
-    history,
-    matches,
+    history: history.map(entry => ({
+      ...entry,
+      player: publicPlayer(entry.player),
+      category: entry.category ? publicCategory(entry.category) : null,
+    })),
+    matches: matches.map(match => ({
+      ...match,
+      winner: publicPlayer(match.winner),
+      loser: publicPlayer(match.loser),
+      category: publicCategory(match.category),
+    })),
 
-    background: background?.value
-      ? mediaUrl(
-          "/api/media?type=setting&key=background",
-          background.value
-        )
-      : null,
-
-    logo: logo?.value
-      ? mediaUrl(
-          "/api/media?type=setting&key=logo",
-          logo.value
-        )
-      : null,
+    background: imageURL("setting", "background"),
+    logo: imageURL("setting", "logo"),
 
     pokeCompareHighScores: parsedHighScores,
 
-    pokeCompareArt: pokeCompareArt?.value
-      ? mediaUrl(
-          "/api/media?type=setting&key=pokecompare_art",
-          pokeCompareArt.value
-        )
-      : null,
+    pokeCompareArt: imageURL("setting", "pokecompare_art"),
 
     pokeCompareHideDetails:
       hideHighScoreDetails,
