@@ -52,6 +52,7 @@ export async function GET(request: NextRequest) {
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy": "sandbox; default-src 'none'",
       "ETag": etag,
+      "Vercel-CDN-Cache-Control": requestedVersion ? "public, max-age=86400" : "no-store",
       "Cache-Control": requestedVersion
         ? "public, max-age=86400, s-maxage=86400"
         : "no-cache",

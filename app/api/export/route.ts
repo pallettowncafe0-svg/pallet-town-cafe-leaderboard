@@ -173,7 +173,7 @@ export async function GET() {
       "Hide High Score Details": hideHighScoreDetails ? "Yes" : "No",
     }]);
 
-    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer", compression: true });
     const filename = `ptc-leaderboard-backup-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
     return new NextResponse(buffer, {

@@ -88,6 +88,7 @@ async function main() {
     assert.equal(media.status, 200);
     assert.equal(media.headers.get("content-type"), "image/png");
     assert.equal(media.headers.get("cache-control"), "public, max-age=86400, s-maxage=86400");
+    assert.equal(media.headers.get("vercel-cdn-cache-control"), "public, max-age=86400");
     assert.equal(Buffer.from(await media.arrayBuffer()).toString(), Buffer.from(image.split(",")[1], "base64").toString());
   }
   const getMedia = (url: string, headers?: Record<string,string>) => mediaGET(new NextRequest(new URL(url, "http://localhost"), { headers }));
