@@ -11,7 +11,10 @@ Set secure environment variables in Vercel Production and the preview environmen
 used for testing: DATABASE_URL, AUTH_SECRET, and ADMIN_PASSWORD_HASH (preferred)
 or ADMIN_PASSWORD. Never commit credentials. Use a fresh random AUTH_SECRET.
 Rotate the previously exposed database password before putting production online.
-Use the existing project's Supabase pooler connection URI compatible with IPv4.
+Use the existing project's Supabase Transaction pooler URI (port 6543), with
+sslmode=require&pgbouncer=true&connection_limit=1. Copy its exact host/user from
+Supabase Connect. Session mode can exhaust its 15 backend slots in serverless.
+The app also limits Prisma to one connection per warm Vercel instance.
 Do not run db:push, reset, seed or migration commands against production.
 
 Deploy only within an available Vercel team; code cannot clear an account pause.
