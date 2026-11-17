@@ -67,7 +67,7 @@ async function main() {
     };
   }
   const response = await dataGET();
-  // Restore delegates before testing Excel, which intentionally fetches original images.
+  // Restore delegates after data response assertions.
   (db.player as any).findMany = async (args: any) => project([player],args);
   (db.category as any).findMany = async (args: any) => project([{...category,records:[record]}],args);
   (db.pointTransaction as any).findMany = async (args: any) => project([transaction],args);
@@ -131,43 +131,18 @@ async function main() {
   const edit = await actionPOST(new NextRequest("http://localhost/api/admin/action", {method:"POST",body:JSON.stringify({action:"category.update",payload:{id:"c1",name:"Renamed",description:"Description"}})}));
   assert.equal(edit.status, 200);
   assert.equal(savedImage, image, "Editing category details preserves original image");
-  (db.player as any).findMany = async () => [player, match.loser];
-  (db.categoryRecord as any).findMany = async () => [{...record, category}];
+  (db.player as any).findMany = async (args: any) => project([player, match.loser], args);
+  (db.categoryRecord as any).findMany = async (args: any) => project([{...record, category}], args);
   const excel = await exportGET();
   assert.equal(excel.status, 200);
   const excelBytes = await excel.arrayBuffer();
   const workbook = XLSX.read(excelBytes, {type:"array"});
   const rows = XLSX.utils.sheet_to_json<any>(workbook.Sheets["Lifetime Leaderboard"]);
   const pfp = Object.entries(rows[0]).filter(([key]) => key.startsWith("Profile Picture ")).map(([,value]) => value).join("");
-  assert.equal(pfp, image, "Excel retains full original PFP in chunks");
+  assert.equal(pfp, "", "Excel excludes all profile picture data");
+  for (const name of workbook.SheetNames) assert.ok(!JSON.stringify(XLSX.utils.sheet_to_json(workbook.Sheets[name])).includes("data:image/"), `${name} excludes image bytes`);
   assert.ok(workbook.SheetNames.includes("Category Settings"));
   assert.ok(workbook.SheetNames.includes("PokéCompare Settings"));
-  // Run the actual replacement importer against isolated in-memory delegates.
-  // This verifies the workbook contract, not PostgreSQL transaction semantics.
-  const imported: Record<string, any[]> = {};
-  const tx: Record<string, any> = {};
-  for (const model of ["player","category","categoryRecord","match","pointTransaction","setting"]) {
-    const items = imported[model] = [];
-    const matchesWhere = (item: any, where: any) => Object.entries(where || {}).every(([key,value]) => typeof value === "object" && value !== null ? matchesWhere(item,value) : item[key] === value);
-    tx[model] = {
-      deleteMany: async ({where}: any = {}) => { for(let i=items.length-1;i>=0;i--) if(matchesWhere(items[i],where)) items.splice(i,1); return {count:0}; },
-      findMany: async ({where}: any = {}) => items.filter(item => matchesWhere(item,where)),
-      create: async ({data}: any) => { const item={id:`${model}-${items.length}`,points:0,wins:0,losses:0,...data};items.push(item);return item; },
-      update: async ({where,data}: any) => { const item=items.find(item=>matchesWhere(item,where));assert.ok(item);Object.assign(item,data);return item; },
-      upsert: async ({where,create,update}: any) => { const actual=where.categoryId_playerId || where; const item=items.find(item=>matchesWhere(item,actual));if(item){Object.assign(item,update);return item;}return tx[model].create({data:create}); },
-    };
-  }
-  (db as any).$transaction = async (callback: any) => callback(tx);
-  const form = new FormData();
-  form.set("file",new File([excelBytes],"backup.xlsx",{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
-  const restored = await importPOST(new NextRequest("http://localhost/api/import",{method:"POST",body:form}));
-  assert.equal(restored.status,200,await restored.text());
-  assert.equal(imported.player.length,2);
-  assert.equal(imported.player.find(p=>p.name==="Test").image,image);
-  assert.equal(imported.category[0].image,image);
-  assert.equal(imported.match.length,1);
-  assert.equal(imported.pointTransaction.length,1);
-  assert.equal(imported.setting.find(s=>s.key==="pokecompare_art").value,image);
   (db as any).$queryRaw = async () => [{value:1}];
   assert.equal((await healthGET()).status,200);
   (db as any).$queryRaw = async () => { throw new Error("unavailable"); };
@@ -178,3 +153,4 @@ async function main() {
   console.log(`Media/data and Excel round-trip regressions passed; synthetic /api/data: ${Buffer.byteLength(text)} bytes; queried record data: ${observedDBBytes} bytes with ${Buffer.byteLength(image)}-byte source images.`);
 }
 main().finally(() => db.$disconnect());
+

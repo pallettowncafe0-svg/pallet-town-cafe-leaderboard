@@ -698,3 +698,23 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
   .champion-display{height:42px}
   .hero-stats b{font-size:18px}
 }
+
+
+/* Import preview and data-only backup controls */
+.import-control { display: grid; gap: 8px; margin: 18px 0 10px; }
+.import-sheets { display: grid; gap: 10px; border: 1px solid #726747; border-radius: 10px; margin: 16px 0; padding: 14px; }
+.import-sheets label { display: flex; align-items: center; gap: 10px; }
+.import-sheets input[type=checkbox] { width: auto; margin: 0; }
+.import-review { margin-top: 24px; padding: 22px; border: 1px solid #726747; border-radius: 14px; background: var(--panel, #151a18); }
+.import-warning { padding: 10px 14px; border-left: 3px solid #d7b153; background: #d7b15314; }
+.import-error { color: #ffaaa4; }
+.import-filters, .import-actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 18px 0; align-items: center; }
+.import-filters > input { flex: 1; min-width: 180px; }
+.import-table-wrap { overflow: auto; max-height: 560px; }
+.import-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.import-table th, .import-table td { padding: 10px; border-bottom: 1px solid #ffffff20; vertical-align: top; min-width: 100px; max-width: 360px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.import-table th { position: sticky; top: 0; background: #242b24; z-index: 1; }
+.import-table .import-remove td:first-child { color: #ffaaa4; }
+.import-table .import-add td:first-child { color: #b5e4a8; }
+.import-table .import-change td:first-child { color: #ebca7a; }
+@media (max-width: 600px) { .import-review { padding: 12px; } .import-filters > * { width: 100%; } }

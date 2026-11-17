@@ -14,17 +14,6 @@ function parsePokemon(value: string | null) {
   };
 }
 
-const EXCEL_CELL_LIMIT = 30000;
-
-function splitForExcel(value: string) {
-  const chunks: Record<string, string> = {};
-  if (!value) return chunks;
-  for (let index = 0, start = 0; start < value.length; index += 1, start += EXCEL_CELL_LIMIT) {
-    chunks[`Part ${index + 1}`] = value.slice(start, start + EXCEL_CELL_LIMIT);
-  }
-  return chunks;
-}
-
 function pokemonColumns(value: string | null) {
   const list = value ? JSON.parse(value) : [];
   const result: Record<string, string> = {};
@@ -40,24 +29,23 @@ export async function GET() {
   try {
     await requireAdmin();
 
-    const [players, categories, transactions, matches, records, highScoreSetting, pokeCompareArtSetting, pokeComparePrivacySetting] = await Promise.all([
-      db.player.findMany({ where: { active: true }, orderBy: [{ points: "desc" }, { name: "asc" }] }),
-      db.category.findMany({ include: { records: { where: { player: { active: true } }, include: { player: true } } }, orderBy: { name: "asc" } }),
-      db.pointTransaction.findMany({ include: { player: true, category: true }, orderBy: { createdAt: "desc" } }),
-      db.match.findMany({ include: { category: true, winner: true, loser: true }, orderBy: { playedAt: "desc" } }),
-      db.categoryRecord.findMany({ where: { player: { active: true } }, include: { category: true, player: true }, orderBy: { category: { name: "asc" } } }),
+    const [players, categories, transactions, matches, records, highScoreSetting, pokeComparePrivacySetting] = await Promise.all([
+      db.player.findMany({ select: { id: true, name: true, ign: true, points: true, bestPerformance: true, hallPokemon: true, createdAt: true, updatedAt: true }, where: { active: true }, orderBy: [{ points: "desc" }, { name: "asc" }] }),
+      db.category.findMany({ select: { id: true, name: true, description: true, records: { where: { player: { active: true } }, select: { wins: true, losses: true, player: { select: { name: true } } } } }, orderBy: { name: "asc" } }),
+      db.pointTransaction.findMany({ select: { id: true, createdAt: true, amount: true, newTotal: true, reason: true, action: true, actor: true, player: { select: { name: true } }, category: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
+      db.match.findMany({ select: { id: true, notes: true, playedAt: true, category: { select: { name: true } }, winner: { select: { name: true } }, loser: { select: { name: true } } }, orderBy: { playedAt: "desc" } }),
+      db.categoryRecord.findMany({ where: { player: { active: true } }, select: { id: true, pokemon: true, category: { select: { name: true } }, player: { select: { name: true, ign: true } } }, orderBy: { category: { name: "asc" } } }),
       db.setting.findUnique({ where: { key: "pokecompare_highscores" } }),
-      db.setting.findUnique({ where: { key: "pokecompare_art" } }),
       db.setting.findUnique({ where: { key: "pokecompare_hide_details" } }),
     ]);
 
     const lifetime = players.map((player, index) => ({
       "Rank": index + 1,
+      "Player ID": player.id,
       "Full Name": player.name,
       "IGN": player.ign || "",
       "Lifetime Points": player.points,
       "Best Performance": player.bestPerformance || "",
-      ...Object.fromEntries(Object.entries(splitForExcel(player.image || "")).map(([key, value]) => [`Profile Picture ${key.replace("Part ", "")}`, value])),
       "Date Added": player.createdAt,
       "Last Updated": player.updatedAt,
     }));
@@ -156,9 +144,9 @@ export async function GET() {
     addSheet("Point History", pointHistory);
     addSheet("Category Leaderboards", categoryLeaderboard);
     addSheet("Category Settings", categories.map((category) => ({
+      "Category ID": category.id,
       "Category": category.name,
       "Description": category.description || "",
-      ...Object.fromEntries(Object.entries(splitForExcel(category.image || "")).map(([key, value]) => [`Image ${key.replace("Part ", "")}`, value])),
     })));
     addSheet("Match History", matchHistory);
     addSheet("Pokemon Records", pokemonRecords);
@@ -169,7 +157,6 @@ export async function GET() {
     }
 
     addSheet("PokéCompare Settings", [{
-      ...Object.fromEntries(Object.entries(splitForExcel(pokeCompareArtSetting?.value || "")).map(([key, value]) => [`Artwork ${key.replace("Part ", "")}`, value])),
       "Hide High Score Details": hideHighScoreDetails ? "Yes" : "No",
     }]);
 
@@ -190,3 +177,4 @@ export async function GET() {
     );
   }
 }
+

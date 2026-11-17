@@ -45,3 +45,20 @@ above against it. Use the committed lockfile with `npm ci`.
 Run `npm run test:media` for route regressions and an Excel export/import round-trip
 with isolated in-memory database delegates. These do not access production and do
 not replace real PostgreSQL/browser acceptance tests.
+
+
+
+## Excel data backups and reviewed imports (1.1)
+
+Excel export excludes all image bytes at the database query level, including nested player/category relations and PokéCompare artwork. It includes stable Player ID and Category ID columns to preserve identity when names change. Keep those IDs intact when editing an export. This is a data-only backup; images need a separate full database/media backup for recovery into an empty database.
+
+Import is a two-step admin workflow under Backup & Restore: choose a file and import mode, generate a preview, optionally select sheets and refresh, then review per-field current/after values before applying. The preview supports additions/changes/removals filters and search.
+
+- Merge (default) upserts history rows by their IDs and preserves rows absent from the workbook. History rows without IDs are new entries, so importing them repeatedly adds entries.
+- Replace selected histories removes match/point history rows missing from the selected sheets. Empty selected history sheets clear those histories; omitted/unselected sheets are untouched.
+- Players/categories are updated in place and never deleted by import, including those absent from the file. Stable IDs take priority, with IGN/name fallback for older backups. Non-image fields on listed rows may be cleared by blank cells.
+- Category standings are recomputed from match history for affected boards. Pokémon sets and supported non-image settings are included in the preview. Selected high-score sheets replace that score list.
+- Every image field and all unrelated settings are excluded by a shared read/write allowlist. Legacy image columns are ignored. Image editing remains available through normal site controls.
+- Preview is read-only. Confirmation uses a signed 15-minute token bound to the exact file, options and non-image database snapshot. Stale previews require a refresh; application runs atomically in a serializable transaction.
+
+Validation: `npm run test:media`, `npm run test:import`, `npm run typecheck`, and `npm run build`. Tests use isolated synthetic database delegates and never connect to Supabase. To check a real backup locally, pass its path to `npm run test:import -- /path/to/backup.xlsx`.

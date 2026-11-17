@@ -1,4 +1,5 @@
 "use client";
+import Backup from "./backup";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 type HighScore={score:number;name:string;note:string;createdAt:string};
 type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[];pokeCompareArt:string|null;pokeCompareHideDetails:boolean};
@@ -1112,25 +1113,8 @@ useEffect(() => {
      {view==="backup"&&
       <Backup
        admin={data.isAdmin}
-       onImport={async(file)=>{
-        const form=new FormData();
-
-        form.append("file",file);
-
-        const r=await fetch(
-         "/api/import",
-         {
-          method:"POST",
-          body:form
-         }
-        );
-
-        const out=await r.json();
-
-        if(!r.ok)throw new Error(out.error);
-
-        setNotice(out.message);
-
+       onImported={async(message)=>{
+        setNotice(message);
         await load();
        }}
       />
@@ -1543,7 +1527,7 @@ function History({
 }
 
 function Profile({player,categories,close,admin,open}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="profile-overlay" onClick={close}><div className="drawer" onClick={e=>e.stopPropagation()}><button className="x" onClick={close}>×</button><div className="profile-heading"><Avatar player={player} className="avatar-large"/><div><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign || "No IGN"}</p></div></div><div className="profile-score"><b>#{player.rank||"—"}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div></div>}
-function Backup({admin,onImport}:any){const [file,setFile]=useState<File|null>(null),[busy,setBusy]=useState(false);return <><div className="section-head"><div><p className="eyebrow">DATA PORTABILITY</p><h2>Backup & Restore</h2></div></div><div className="backup"><article><h3>Export Excel Backup</h3><p>Download the complete current leaderboard, history, battle records, and Pokémon lineups in one `.xlsx` workbook.</p><a className={`button ${!admin?"disabled":""}`} href={admin?"/api/export":undefined}>Export .xlsx</a></article><article><h3>Import Backup</h3><p>Replace the current leaderboard data with this backup. Players, categories, match history, point history, records, and Pokémon lineups will be replaced.</p><input type="file" accept=".xlsx" onChange={e=>setFile(e.target.files?.[0]||null)}/><button className="button" disabled={!admin||!file||busy} onClick={async()=>{if(!confirm("IMPORT REPLACES ALL LEADERBOARD DATA. Current players, categories, match history, point history, records, and Pokémon lineups will be deleted and replaced by this file. Continue?"))return;setBusy(true);try{await onImport(file)}catch(e){alert(e instanceof Error?e.message:"Import failed")}finally{setBusy(false)}}}> {busy?"Importing…":"Confirm Import"}</button></article></div>{!admin&&<p className="empty">Sign in as an admin to access backups.</p>}</>}
+
 function Modal({
  type,
  data,
@@ -2027,4 +2011,5 @@ if(type==="delete-category")return <div className="modal"><form onSubmit={e=>{e.
   }
  return <div className="modal"><form onSubmit={async(e)=>{e.preventDefault();const file=(e.currentTarget.elements.namedItem("file") as HTMLInputElement).files?.[0];if(!file)return;const reader=new FileReader();reader.onload=()=>api("background.set",{value:reader.result});reader.readAsDataURL(file)}}><h2>Custom Background</h2><p>Upload a JPG, PNG, or WebP. A dark overlay is applied automatically.</p><input name="file" type="file" accept="image/*" required/><button className="button">Use Background</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
 }
+
 

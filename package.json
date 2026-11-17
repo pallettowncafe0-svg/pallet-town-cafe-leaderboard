@@ -8,7 +8,8 @@
     "serve": "next start -H 0.0.0.0",
     "db:push": "prisma db push",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
-    "test:media": "node --import tsx tests/media-regression.ts"
+    "test:media": "node --import tsx tests/media-regression.ts",
+    "test:import": "node --import tsx tests/import-regression.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
