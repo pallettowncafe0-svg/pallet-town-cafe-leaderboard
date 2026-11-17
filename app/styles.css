@@ -718,3 +718,28 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .import-table .import-add td:first-child { color: #b5e4a8; }
 .import-table .import-change td:first-child { color: #ebca7a; }
 @media (max-width: 600px) { .import-review { padding: 12px; } .import-filters > * { width: 100%; } }
+
+/* Initial loading screen and admin animation controls */
+.initial-loading { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; padding: 24px; background: #0b0e0c; color: #eee9dc; }
+.initial-loading h1 { font-size: clamp(22px,4vw,34px); margin: 8px 0; }
+.initial-loading p { margin: 0; }
+.loading-art { width: min(320px,75vw); height: 250px; display: grid; place-items: center; isolation: isolate; background: #0b0e0c; overflow: hidden; }
+.loading-art > * { grid-area: 1 / 1; }
+.loading-art img { width: 100%; height: 100%; object-fit: contain; }
+.loading-art img.blend-white { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; }
+.loading-orbit { width: 70px; height: 70px; border: 3px solid #d7b15330; border-top-color: #d7b153; border-radius: 50%; animation: cafe-spin 1s linear infinite; }
+@keyframes cafe-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loading-orbit { animation: none; border-color: #d7b153; } }
+.admin-loading-art { width: 220px; max-width: 100%; height: 160px; border-radius: 12px; margin-bottom: 14px; }
+.loading-controls { border-bottom: 1px solid #ffffff20; padding-bottom: 22px; margin-bottom: 22px; }
+.loading-blend-control { display: flex; gap: 10px; align-items: center; }
+.loading-blend-control input[type=checkbox] { width: auto; margin: 0; }
+.loading-control-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.history-filters { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
+.history-filters label { display: grid; gap: 8px; }
+.history-filters label:first-child { flex: 1; min-width: 240px; }
+.history-section { margin-bottom: 32px; }
+.history-older { margin-top: 14px; padding: 16px; border: 1px solid #d7b15340; border-radius: 12px; }
+.history-older summary { cursor: pointer; color: #d7b153; font-weight: 600; }
+.history-older[open] summary { margin-bottom: 18px; }
+@media(max-width:600px) { .history-filters { align-items: stretch; } .history-filters label { width: 100%; } .history-filters label:first-child { min-width: 0; } }

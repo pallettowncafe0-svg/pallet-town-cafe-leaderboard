@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
       value = record?.image;
     } else if (type === "setting") {
       const key = params.get("key");
-      if (!key || !["background", "logo", "pokecompare_art"].includes(key)) {
+      if (!key || !["background", "logo", "pokecompare_art", "loading_gif"].includes(key)) {
         return failure("Invalid setting", 400);
       }
       value = (await db.setting.findUnique({ where: { key }, select: { value: true } }))?.value;
@@ -65,3 +65,4 @@ export async function GET(request: NextRequest) {
     return failure("Could not load media", 500);
   }
 }
+

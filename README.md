@@ -64,3 +64,14 @@ Import is a two-step admin workflow under Backup & Restore: choose a file and im
 Validation: `npm run test:media`, `npm run test:import`, `npm run test:backup`, `npm run typecheck`, and `npm run build`. Tests use isolated synthetic database delegates and never connect to Supabase. To check a real backup locally, pass its path to `npm run test:import -- /path/to/backup.xlsx`.
 
 Backup round-trip checks cover unedited exports (zero changes) and a one-point lifetime edit (exactly one change), including native Excel date cells, milliseconds, high-score timestamps and null/empty Pokémon lineups. New exports use exact ISO UTC date text. Legacy native date cells are decoded as UTC numeric serials; only floating point drift within 2 ms retains the existing instant. Explicit ISO timestamp edits are compared exactly. Equivalent empty lineups retain their original stored representation.
+
+
+## Loading screen and searchable history
+
+Admin Controls → Loading Screen GIF accepts GIF uploads up to 2 MB. Admins can replace/remove the animation and toggle white-background blending, with a preview of the current GIF. The original bytes are stored in the existing Setting table; no schema migration is needed. A default animation is shown until a GIF is configured. The initial loading screen lasts at least 1.5 seconds and waits for leaderboard data. Data failures show a retry action, and broken GIFs fall back to the default animation.
+
+The initial page fetches only GIF version metadata from `/api/loading`; GIF bytes use `/api/media`'s versioned cache. Browser storage contains only the small versioned URL/appearance to display the GIF promptly on repeat visits. Excel export/import never reads or writes the loading GIF or its appearance setting.
+
+History provides Points & Matches, Points only, and Matches only search. Each section shows its latest 10 entries, with older entries behind an expandable section and a Load 10 More button. `/api/history` searches all records by player name/IGN, category, point reason/action/admin or match notes; integer searches also match point changes and totals. It fetches only ten entries plus a pagination lookahead per type, with no image columns or embedded image data. Existing admin edit/delete controls are retained.
+
+Validation: `npm run test:loading-history` uses synthetic delegates to verify paging, searches beyond the previous 100-entry limit, upload authorization/validation, GIF preservation/removal, and cache headers.

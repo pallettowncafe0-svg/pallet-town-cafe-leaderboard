@@ -1,5 +1,8 @@
 "use client";
 import Backup from "./backup";
+import History from "./history";
+import { LoadingScreen, LoadingControls } from "./loading-screen";
+import type { LoadingConfig } from "@/lib/loading";
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 type HighScore={score:number;name:string;note:string;createdAt:string};
 type Data={players:any[];categories:any[];history:any[];matches:any[];background:string|null;logo:string|null;isAdmin:boolean;pokeCompareHighScores:HighScore[];pokeCompareArt:string|null;pokeCompareHideDetails:boolean};
@@ -583,20 +586,44 @@ const [selectedTransaction,setSelectedTransaction]=useState<any>(null);
 const [pokemonOptions,setPokemonOptions]=useState<string[]>([]);
 const [modal,setModal]=useState<string|null>(null);;
  const [notice,setNotice]=useState("");
+ const [boot,setBoot]=useState<"loading"|"ready"|"error">("loading");
+ const [loadingConfig,setLoadingConfig]=useState<LoadingConfig>({image:null,blend:true});
+ const refreshLoading=async()=>{
+  try{
+   const response=await fetch("/api/loading",{cache:"no-store",signal:AbortSignal.timeout(4000)});
+   if(!response.ok)return;
+   const config=await response.json();
+   setLoadingConfig(config);
+   try{localStorage.setItem("ptc-loading-config",JSON.stringify(config));}catch{}
+  }catch{}
+ };
+ const startLoading=async()=>{
+  setBoot("loading");
+  setNotice("");
+  const [ok]=await Promise.all([load(),refreshLoading(),new Promise(resolve=>setTimeout(resolve,1500))]);
+  setBoot(ok?"ready":"error");
+ };
+
 
  const load=async()=>{
   try{
-   const r=await fetch("/api/data",{cache:"no-store"});
+   const r=await fetch("/api/data",{cache:"no-store",signal:AbortSignal.timeout(20000)});
    if(!r.ok)throw new Error("Could not load leaderboard data.");
    const result=await r.json();
    setData(result);
+   return true;
   }catch{
    setNotice("Could not load leaderboard data.");
+   return false;
   }
  };
 
 useEffect(() => {
-  void load();
+  try{
+   const stored=JSON.parse(localStorage.getItem("ptc-loading-config")||"null");
+   if(stored&&typeof stored.blend==="boolean"&&(stored.image===null||typeof stored.image==="string"&&stored.image.startsWith("/api/media?type=setting&")))setLoadingConfig(stored);
+  }catch{}
+  void startLoading();
 
   fetch("https://pokeapi.co/api/v2/pokemon?limit=2000")
     .then(response => response.json())
@@ -679,6 +706,7 @@ useEffect(() => {
           ? selectedTransaction
           : selectedPlayer;
 
+ if(boot!=="ready")return <LoadingScreen key={loadingConfig.image||"default"} config={loadingConfig} error={boot==="error"} retry={()=>void startLoading()}/>;
  return (
   <main className="site" style={background}>
    <style>{`
@@ -1152,6 +1180,8 @@ useEffect(() => {
   close={()=>setModal(null)}
   api={api}
   reload={load}
+  loadingConfig={loadingConfig}
+  reloadLoading={refreshLoading}
   pokemonOptions={pokemonOptions}
   selectedPlayer={selectedPlayer}
   selectedCategory={selectedCategory}
@@ -1403,129 +1433,6 @@ function Category({
   );
 }
 
-function History({
-  items,
-  matches,
-  admin,
-  open,
-  choose,
-  selectTransaction,
-}: any) {
-  return (
-    <>
-      <div className="section-head">
-        <div>
-          <p className="eyebrow">PERMANENT RECORDS</p>
-          <h2>Activity History</h2>
-        </div>
-      </div>
-
-      <h3>Point Transactions</h3>
-
-      <div className="timeline">
-        {items.map((x: any) => (
-          <article key={x.id}>
-            <b className={x.amount > 0 ? "plus" : "minus"}>
-              {x.amount > 0 ? "+" : ""}
-              {x.amount} pts
-            </b>
-
-            <div>
-              <strong>
-                {x.player.name} <small>/{x.player.ign || "No IGN"}</small>
-              </strong>
-              <p>
-                {x.reason || x.action}
-                {x.category?.name ? ` · ${x.category.name}` : ""}
-                {` · New total: ${x.newTotal}`}
-              </p>
-            </div>
-
-            <time>{fmt(x.createdAt)}</time>
-
-            {admin && (
-              <div className="history-actions">
-                <button
-                  type="button"
-                  className="link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    selectTransaction(x);
-                    open("edit-points");
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className="link danger-link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    selectTransaction(x);
-                    open("delete-points");
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
-
-      <h3>Battle History</h3>
-
-      <div className="timeline">
-        {matches.map((m: any) => (
-          <article key={m.id}>
-            <b>BATTLE</b>
-
-            <div>
-              <strong>
-                {m.winner?.name || m.winner?.ign || m.winnerId} defeated{" "}
-                {m.loser?.name || m.loser?.ign || m.loserId}
-              </strong>
-              <p>
-                {m.category?.name || m.categoryId}
-                {m.notes ? ` · ${m.notes}` : ""}
-              </p>
-            </div>
-
-            <time>{fmt(m.playedAt)}</time>
-
-            {admin && (
-              <div className="history-actions">
-                <button
-                  type="button"
-                  className="link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    choose(m);
-                    open("edit-match");
-                  }}
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  className="link danger-link"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    choose(m);
-                    open("delete-match");
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            )}
-          </article>
-        ))}
-      </div>
-    </>
-  );
-}
-
 function Profile({player,categories,close,admin,open}:any){const records=categories.flatMap((c:any)=>c.records.filter((r:any)=>r.playerId===player.id).map((r:any)=>({...r,category:c.name})));return <div className="profile-overlay" onClick={close}><div className="drawer" onClick={e=>e.stopPropagation()}><button className="x" onClick={close}>×</button><div className="profile-heading"><Avatar player={player} className="avatar-large"/><div><p className="eyebrow">TRAINER PROFILE</p><h2>{player.name}</h2><p className="ign">{player.ign || "No IGN"}</p></div></div><div className="profile-score"><b>#{player.rank||"—"}<small>Overall rank</small></b><b>{player.points}<small>Lifetime points</small></b></div><p><strong>Best performance</strong><br/>{player.bestPerformance||"Not recorded yet"}</p><p className="notes">{player.notes}</p>{admin&&<div className="drawer-actions"><button className="button" onClick={()=>open("edit-player")}>Edit Player</button><button className="danger" onClick={()=>open("delete-player")}>Delete Player</button></div>}<h3>Battle Records</h3>{records.length?records.map((r:any)=><article className="record" key={r.id}><b>{r.category}</b><span>#{r.rank} · {r.wins}W / {r.losses}L</span></article>):<p className="muted">No category battles recorded.</p>}</div></div>}
 
 function Modal({
@@ -1536,6 +1443,8 @@ function Modal({
  api,
  reload,
  pokemonOptions,
+ loadingConfig,
+ reloadLoading,
  selectedPlayer,
  selectedCategory,
 }:any){const [reason,setReason]=useState(""); const [pokemonTarget,setPokemonTarget]=useState(""); const [pokemonPlayerTarget,setPokemonPlayerTarget]=useState(""); const [matchCategoryTarget,setMatchCategoryTarget]=useState(""); useEffect(()=>{if(type==="pokemon"){setPokemonTarget(selectedCategory?.id||"hall");setPokemonPlayerTarget(selectedPlayer?.id||"");}if(type==="match"){setMatchCategoryTarget(selectedCategory?.id||"");}if(type==="points"||type==="category-points"){setReason("");}},[type,selectedCategory?.id,selectedPlayer?.id]); const selectedRoster=useMemo(()=>{if(!pokemonPlayerTarget)return []; if(pokemonTarget==="hall"){const player=data.players.find((p:any)=>p.id===pokemonPlayerTarget);return Array.isArray(player?.hallPokemon)?player.hallPokemon:[];} const category=data.categories.find((c:any)=>c.id===pokemonTarget); const record=category?.records?.find((r:any)=>r.playerId===pokemonPlayerTarget); return Array.isArray(record?.pokemon)?record.pokemon:[];},[data.players,data.categories,pokemonTarget,pokemonPlayerTarget]); const submit=async(e:FormEvent<HTMLFormElement>,action:string)=>{e.preventDefault();const f=new FormData(e.currentTarget),p=Object.fromEntries(f);try{await api(action,p)}catch(err){alert(err instanceof Error?err.message:"Unable to save")}}; if(type==="login")return <div className="modal"><form onSubmit={async e=>{e.preventDefault();const r=await fetch("/api/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:new FormData(e.currentTarget).get("password")})});if(r.ok){await reload();close()}else {const result=await r.json().catch(()=>({}));alert(result.error||"Admin login failed. Please try again.")}}}><h2>Admin Sign In</h2><p>Protected actions are server-verified.</p><input name="password" type="password" required placeholder="Admin password"/><button className="button">Sign in</button><button type="button" className="link" onClick={close}>Cancel</button></form></div>;
@@ -1544,6 +1453,8 @@ function Modal({
       <div className="modal">
         <div className="admin-panel">
           <h2>Admin Controls</h2>
+
+          <LoadingControls config={loadingConfig} onSaved={reloadLoading}/>
 
           <h3>Custom Background</h3>
           <form

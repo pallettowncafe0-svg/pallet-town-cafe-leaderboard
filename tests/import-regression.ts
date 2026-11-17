@@ -31,7 +31,7 @@ const fixture = {
   pointTransaction: [{ id: "t-old", playerId: "p1", categoryId: "c1", amount: 10, newTotal: 10, reason: null, action: "Award", actor: "Admin", createdAt: now }],
   setting: [
     { key: "pokecompare_highscores", value: "[]" }, { key: "pokecompare_hide_details", value: "false" },
-    ...["pokecompare_art", "background", "logo", "future_image_setting"].map(key => ({ key, value: image })),
+    ...["pokecompare_art", "background", "logo", "future_image_setting", "loading_gif", "loading_gif_blend"].map(key => ({ key, value: image })),
   ],
 };
 let live = structuredClone(fixture);
@@ -107,7 +107,7 @@ async function main() {
   assert.equal(live.match.length, 2);
   assert.equal(live.pointTransaction.length, 2);
   for (const row of [...live.player, ...live.category]) assert.equal(row.image, image);
-  for (const key of ["pokecompare_art", "background", "logo", "future_image_setting"]) assert.equal(live.setting.find(row => row.key === key)?.value, image);
+  for (const key of ["pokecompare_art", "background", "logo", "future_image_setting", "loading_gif", "loading_gif_blend"]) assert.equal(live.setting.find(row => row.key === key)?.value, image);
   const replacementResponse = await POST(request(bytes, "preview", undefined, "replace"));
   const replacement = await replacementResponse.json();
   assert.equal(replacement.counts.remove, 2);
