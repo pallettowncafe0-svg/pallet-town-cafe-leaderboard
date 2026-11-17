@@ -9,7 +9,8 @@
     "db:push": "prisma db push",
     "typecheck": "next typegen && tsc -p tsconfig.json --noEmit",
     "test:media": "node --import tsx tests/media-regression.ts",
-    "test:import": "node --import tsx tests/import-regression.ts"
+    "test:import": "node --import tsx tests/import-regression.ts",
+    "test:backup": "node --import tsx tests/backup-roundtrip.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

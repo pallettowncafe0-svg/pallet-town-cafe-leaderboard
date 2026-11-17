@@ -46,13 +46,13 @@ export async function GET() {
       "IGN": player.ign || "",
       "Lifetime Points": player.points,
       "Best Performance": player.bestPerformance || "",
-      "Date Added": player.createdAt,
-      "Last Updated": player.updatedAt,
+      "Date Added": player.createdAt.toISOString(),
+      "Last Updated": player.updatedAt.toISOString(),
     }));
 
     const pointHistory = transactions.map((transaction) => ({
       "Transaction ID": transaction.id,
-      "Date": transaction.createdAt,
+      "Date": transaction.createdAt.toISOString(),
       "Player": transaction.player.name,
       "Points Change": transaction.amount,
       "New Total": transaction.newTotal,
@@ -90,7 +90,7 @@ export async function GET() {
       "Category": match.category.name,
       "Winner": match.winner.name,
       "Loser": match.loser.name,
-      "Date": match.playedAt,
+      "Date": match.playedAt.toISOString(),
       "Notes": match.notes || "",
     }));
 
@@ -131,7 +131,7 @@ export async function GET() {
       "Score": Number(entry.score) || 0,
       "Name": String(entry.name || ""),
       "Message": String(entry.note || ""),
-      "Date": entry.createdAt ? new Date(entry.createdAt) : new Date(),
+      "Date": entry.createdAt ? new Date(entry.createdAt).toISOString() : new Date().toISOString(),
     }));
 
     const workbook = XLSX.utils.book_new();

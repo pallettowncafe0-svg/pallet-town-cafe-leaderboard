@@ -17,7 +17,7 @@ function parseDateValue(value: unknown, fallback: Date) {
     if (typeof value === "number") {
         const parsed = XLSX.SSF.parse_date_code(value);
         if (parsed) {
-            const result = new Date(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, parsed.S || 0);
+            const result = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d, parsed.H || 0, parsed.M || 0, parsed.S || 0, Math.round((parsed.u || 0) * 1000)));
             if (!Number.isNaN(result.getTime()))
                 return result;
         }
@@ -49,6 +49,14 @@ function getRowValue(row: Row, keys: string[]) {
             return value;
     }
     return "";
+}
+// Dates must retain their raw cell type; String(Date) discards milliseconds.
+function getRawRowValue(row: Row, keys: string[]) {
+    for (const candidate of keys) {
+        const value = row[key(candidate)];
+        if (value !== null && value !== undefined && value !== "") return value;
+    }
+    return undefined;
 }
 function getSheet(workbook: XLSX.WorkBook, names: string[]) {
     const wanted = new Set(names.map(key));
@@ -88,7 +96,23 @@ function boolValue(value: unknown) {
     return normalized === "yes" || normalized === "true" || normalized === "1";
 }
 export async function simulateWorkbook(tx: ImportMemory, workbook: XLSX.WorkBook, mode: "merge" | "replace", reviewedAt: number) {
-    const dateValue = (value: unknown) => parseDateValue(value, new Date(reviewedAt));
+    const dateValue = (value: unknown, existing?: Date | string) => {
+        const original = existing ? new Date(existing) : undefined;
+        const parsed = parseDateValue(value, original || new Date(reviewedAt));
+        // Native Excel dates can drift by a millisecond due to floating point
+        // serials. Keep the stored instant for those round-trip artifacts only.
+        // ISO strings are exact and deliberately edited times still count.
+        if (original && (value instanceof Date || typeof value === "number") && Math.abs(parsed.getTime() - original.getTime()) <= 2) return original;
+        return parsed;
+    };
+    const originalMatches = new Map((await tx.match.findMany()).map(row => [row.id, row]));
+    const originalTransactions = new Map((await tx.pointTransaction.findMany()).map(row => [row.id, row]));
+    const originalScoreSetting = (await tx.setting.findMany({ where: { key: "pokecompare_highscores" } }))[0];
+    let originalScores: { score: number; name: string; note: string; createdAt: string }[] = [];
+    try {
+        const parsed = JSON.parse(originalScoreSetting?.value || "[]");
+        if (Array.isArray(parsed)) originalScores = parsed;
+    } catch { /* Invalid stored scores are replaced by the reviewed rows. */ }
     const hasSheet = (...names: string[]) => workbook.SheetNames.some(name => names.map(key).includes(key(name)));
     const lifetimeRows = getSheet(workbook, ["Lifetime Leaderboard"]);
     const pointRows = getSheet(workbook, ["Point History"]);
@@ -301,9 +325,9 @@ export async function simulateWorkbook(tx: ImportMemory, workbook: XLSX.WorkBook
             skippedMatchReasons.add(`row ${index + 2}: winner or loser could not be resolved`);
             continue;
         }
-        const playedAt = dateValue(row[key("Date")] ?? row[key("Played At")] ?? row[key("Match Date")] ?? row[key("Timestamp")]);
-        const notes = getRowValue(row, ["Notes", "Note"]) || null;
         const backupId = getRowValue(row, ["Match ID", "ID"]);
+        const playedAt = dateValue(getRawRowValue(row, ["Date", "Played At", "Match Date", "Timestamp"]), originalMatches.get(backupId)?.playedAt);
+        const notes = getRowValue(row, ["Notes", "Note"]) || null;
         const matchData = { categoryId: category.id, winnerId: winner.id, loserId: loser.id, notes, playedAt };
         if (backupId) {
             await tx.match.upsert({ where: { id: backupId }, create: { id: backupId, ...matchData }, update: matchData });
@@ -320,11 +344,11 @@ export async function simulateWorkbook(tx: ImportMemory, workbook: XLSX.WorkBook
         const amount = Math.trunc(number(getRowValue(row, ["Points Change", "Amount"])));
         if (!amount)
             continue;
-        const createdAt = dateValue(getRowValue(row, ["Date", "Created At", "Timestamp"]));
+        const transactionId = getRowValue(row, ["Transaction ID"]);
+        const createdAt = dateValue(getRawRowValue(row, ["Date", "Created At", "Timestamp"]), originalTransactions.get(transactionId)?.createdAt);
         const reason = getRowValue(row, ["Reason"]) || null;
         const action = getRowValue(row, ["Action"]) || "Imported transaction";
         const actor = getRowValue(row, ["Admin", "Actor"]) || "Import";
-        const transactionId = getRowValue(row, ["Transaction ID"]);
         const categoryName = getRowValue(row, ["Category"]);
         const category = categoryName ? await ensureCategory(categoryName) : undefined;
         const transactionData = {
@@ -418,12 +442,15 @@ export async function simulateWorkbook(tx: ImportMemory, workbook: XLSX.WorkBook
         }
     }
     const importedHighScores = highScoreRows
-        .map((row) => ({
-        score: Math.max(0, Math.trunc(number(getRowValue(row, ["Score"])))),
-        name: getRowValue(row, ["Name", "Player", "Initials"]).slice(0, 16),
-        note: getRowValue(row, ["Message", "Note"]).slice(0, 24),
-        createdAt: dateValue(getRowValue(row, ["Date", "Created At"])).toISOString(),
-    }))
+        .map((row) => {
+            const score = Math.max(0, Math.trunc(number(getRowValue(row, ["Score"]))));
+            const name = getRowValue(row, ["Name", "Player", "Initials"]).slice(0, 16);
+            const note = getRowValue(row, ["Message", "Note"]).slice(0, 24);
+            const raw = getRawRowValue(row, ["Date", "Created At"]);
+            const parsed = dateValue(raw);
+            const original = originalScores.find(entry => entry.score === score && entry.name === name && entry.note === note && Math.abs(new Date(entry.createdAt).getTime() - parsed.getTime()) <= 2);
+            return { score, name, note, createdAt: dateValue(raw, original?.createdAt).toISOString() };
+        })
         .filter((entry) => entry.score > 0 && entry.name)
         .sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt))
         .slice(0, 10);

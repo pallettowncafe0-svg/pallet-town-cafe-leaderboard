@@ -22,7 +22,9 @@ export async function POST(request: NextRequest) {
     const bytes = Buffer.from(await file.arrayBuffer());
     if (!bytes.length) throw new Error("The selected Excel file is empty.");
     const fileHash = createHash("sha256").update(bytes).digest("hex");
-    const workbook = XLSX.read(bytes, { type: "buffer", cellDates: true });
+    // Read native dates as numeric Excel serials and interpret them as UTC in
+    // the parser. SheetJS Date conversion otherwise depends on the server TZ.
+    const workbook = XLSX.read(bytes, { type: "buffer", cellDates: false });
     const allSheets = [...workbook.SheetNames];
     const selected = form.get("sheets");
     if (selected) {

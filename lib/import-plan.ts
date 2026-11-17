@@ -133,6 +133,21 @@ export async function planImport(before: Snapshot, workbook: XLSX.WorkBook, mode
     const next = new Map(after[model].map(row => [row[idField], row]));
     for (const id of new Set([...old.keys(), ...next.keys()])) {
       const previous = old.get(id), current = next.get(id);
+      if (previous && current) {
+        // Keep the actual stored representation of an unchanged empty lineup.
+        // This prevents both preview noise AND null-to-[] writes on apply.
+        for (const field of model === "player" ? ["hallPokemon"] : model === "categoryRecord" ? ["pokemon"] : []) {
+          const empty = (value: unknown) => value == null || value === "" || (typeof value === "string" && /^\[\s*\]$/.test(value.trim()));
+          if (empty(previous[field]) && empty(current[field])) current[field] = previous[field];
+        }
+        if (model === "setting") {
+          try {
+            const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
+              : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonical(item)])) : value;
+            if (JSON.stringify(canonical(JSON.parse(previous.value))) === JSON.stringify(canonical(JSON.parse(current.value)))) current.value = previous.value;
+          } catch { /* Non-JSON settings compare as plain strings below. */ }
+        }
+      }
       const changed = fields[model].filter(field => field !== idField && JSON.stringify(previous?.[field] ?? null) !== JSON.stringify(current?.[field] ?? null));
       if (previous && current && !changed.length) continue;
       const action = !previous ? "add" : !current ? "remove" : "change";
